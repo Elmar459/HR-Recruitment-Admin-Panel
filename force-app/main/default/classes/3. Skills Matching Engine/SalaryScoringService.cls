@@ -12,18 +12,18 @@ public class SalaryScoringService {
             return 100;
         }
 
-        // within range
+        
         if(candidateSalary >= minSalary &&
            candidateSalary <= maxSalary) {
             return 100;
         }
 
-        // below range (rare case → treat as 100)
+        
         if(candidateSalary < minSalary) {
             return 100;
         }
 
-        // above max → penalty
+        
         Decimal ratio = candidateSalary / maxSalary;
 
         if(ratio <= 1.1) return 90;

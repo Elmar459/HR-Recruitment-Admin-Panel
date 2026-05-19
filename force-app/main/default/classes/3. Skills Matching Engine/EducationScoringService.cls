@@ -21,12 +21,28 @@ public class EducationScoringService {
 
     private static Integer getLevel(String edu) {
 
-        if(edu == 'High School') return 1;
-        if(edu == 'Associate') return 2;
-        if(edu == 'Bachelor') return 3;
-        if(edu == 'Master') return 4;
-        if(edu == 'PhD') return 5;
+        if(edu == null) return 0;
 
-        return 0;
+    switch on edu {
+
+        when 'High School' {
+            return 1;
+        }
+        when 'Associate' {
+            return 2;
+        }
+        when 'Bachelor' {
+            return 3;
+        }
+        when 'Master' {
+            return 4;
+        }
+        when 'PhD' {
+            return 5;
+        }
+        when else {
+            return 0;
+        }
     }
+}
 }
