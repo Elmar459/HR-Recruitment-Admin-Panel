@@ -1,9 +1,6 @@
 public class ExperienceScoringService {
 
-    public static Decimal calculate(
-        List<Candidate_Skill__c> candidateSkills,
-        List<Position_Skill__c> positionSkills
-    ) {
+    public static Decimal calculate(List<Candidate_Skill__c> candidateSkills, List<Position_Skill__c> positionSkills) {
 
         Decimal requiredYears = 0;
         Decimal candidateYears = 0;

@@ -50,16 +50,13 @@ public with sharing class CandidateMatchingService {
         ];
 
         // SKILLS Overlap (35%)
-        Decimal skillsScore =
-            SkillsScoringService.calculate(candidateSkillMap, positionSkills);
+        Decimal skillsScore = SkillsScoringService.calculate(candidateSkillMap, positionSkills);
 
         // EXPERIENCE Level (25%)
-        Decimal experienceScore =
-            ExperienceScoringService.calculate(candidateSkills, positionSkills);
+        Decimal experienceScore = ExperienceScoringService.calculate(candidateSkills, positionSkills);
 
         // EDUCATION Fit (15%)
-        Decimal educationScore =
-        EducationScoringService.calculate(app.Candidate__r.Education_Level__c, app.Position__r.Education_Level__c);
+        Decimal educationScore = EducationScoringService.calculate(app.Candidate__r.Education_Level__c, app.Position__r.Education_Level__c);
 
         // Salary Fit (15%)
         Decimal salaryScore =
@@ -89,7 +86,7 @@ public with sharing class CandidateMatchingService {
             finalScore = Math.min(finalScore, 100);
 
         app.Match_Score__c = finalScore;
-        update app;
+        
 
     // For anonyous testing. Could be removed in production.
     System.debug('SKILLS = ' + skillsScore);

@@ -7,7 +7,7 @@ public class LocationScoringService {
         Boolean positionRemote
     ) {
 
-        // 1. Remote override (самый высокий приоритет)
+        // 1. Remote override
         if(candidateRemote == true &&
            positionRemote == true) {
             return 100;
@@ -20,14 +20,14 @@ public class LocationScoringService {
             return 100;
         }
 
-        // 3. Adjacent region (упрощённая логика)
+        // 3. Adjacent region
         if(candidateLocation != null &&
            positionLocation != null) {
 
             String c = candidateLocation.toLowerCase();
             String p = positionLocation.toLowerCase();
 
-            // пример условной "смежности"
+            
             if(c.contains(p) || p.contains(c)) {
                 return 70;
             }

@@ -1,9 +1,6 @@
 public class SkillsScoringService {
 
-    public static Decimal calculate(
-        Map<Id, Candidate_Skill__c> candidateSkillMap,
-        List<Position_Skill__c> positionSkills
-    ) {
+    public static Decimal calculate(Map<Id, Candidate_Skill__c> candidateSkillMap,List<Position_Skill__c> positionSkills) {
 
         Decimal totalWeight = 0;
         Decimal earnedScore = 0;
@@ -14,14 +11,11 @@ public class SkillsScoringService {
 
             if(candidateSkillMap.containsKey(ps.Skill__c)) {
 
-                Candidate_Skill__c cs =
-                    candidateSkillMap.get(ps.Skill__c);
+                Candidate_Skill__c cs = candidateSkillMap.get(ps.Skill__c);
 
-                Integer candidateLevel =
-                    getLevel(cs.Proficiency_Level__c);
+                Integer candidateLevel = getLevel(cs.Proficiency_Level__c);
 
-                Integer requiredLevel =
-                    getLevel(ps.Minimum_Level__c);
+                Integer requiredLevel = getLevel(ps.Minimum_Level__c);
 
                 if(candidateLevel >= requiredLevel) {
                     earnedScore += ps.Weight__c;
@@ -39,11 +33,22 @@ public class SkillsScoringService {
 
     private static Integer getLevel(String level) {
 
-        if(level == 'Beginner') return 1;
-        if(level == 'Intermediate') return 2;
-        if(level == 'Advanced') return 3;
-        if(level == 'Expert') return 4;
-
+        switch on level {
+    when 'Beginner' {
+        return 1;
+    }
+    when 'Intermediate' {
+        return 2;
+    }
+    when 'Advanced' {
+        return 3;
+    }
+    when 'Expert' {
+        return 4;
+    }
+    when else {
         return 0;
+    }
+}
     }
 }
