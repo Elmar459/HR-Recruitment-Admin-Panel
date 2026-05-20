@@ -2,14 +2,9 @@ public with sharing class RecruiterAssignmentService {
 
     public static Id assign(Id applicationId) {
 
-        Application__c app = [
-            SELECT Id
-            FROM Application__c
-            WHERE Id = :applicationId
-            LIMIT 1
-        ];
+        // Get recruiter with lowest workload
 
-        List<Recruiter_Workload__c> listRw = [
+        List<Recruiter_Workload__c> workloads = [
             SELECT Id,
                    Recruiter__c,
                    Workload_Count__c
@@ -18,15 +13,25 @@ public with sharing class RecruiterAssignmentService {
             LIMIT 1
         ];
 
-        if(listRw.isEmpty()) return null;
 
-        Recruiter_Workload__c selected = listRw[0];
+        if(workloads.isEmpty()) {
 
-        // increase workload
+            User hrManager = [
+
+                SELECT Id
+                FROM User
+                WHERE UserRole.Name = 'HR Manager'
+                LIMIT 1
+            ];
+
+            return hrManager.Id;
+        }
+
+        // Assign recruiter
+        Recruiter_Workload__c selected = workloads[0];
+
         selected.Workload_Count__c =
             (selected.Workload_Count__c == null ? 0 : selected.Workload_Count__c) + 1;
-
-            System.debug([SELECT Id, Workload_Count__c FROM Recruiter_Workload__c]);
 
         update selected;
 
