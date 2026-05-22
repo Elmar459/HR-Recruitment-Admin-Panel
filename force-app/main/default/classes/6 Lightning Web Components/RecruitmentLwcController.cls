@@ -102,7 +102,7 @@ public with sharing class RecruitmentLwcController {
             }
         }
 
-        Datetime startTime = nextBusinessSlot();
+        Datetime startTime = nextAvailableSlot(UserInfo.getUserId());
         return InterviewService.scheduleInterview(applicationId, UserInfo.getUserId(), startTime, nextType);
     }
 
@@ -486,13 +486,33 @@ public with sharing class RecruitmentLwcController {
         return null;
     }
 
-    private static Datetime nextBusinessSlot() {
-        Datetime slot = System.now().addDays(1);
-        slot = Datetime.newInstance(slot.date(), Time.newInstance(10, 0, 0, 0));
-        while (slot.format('E') == 'Sat' || slot.format('E') == 'Sun') {
-            slot = slot.addDays(1);
+    private static Datetime nextAvailableSlot(Id interviewerId) {
+        Datetime searchStart = System.now();
+        Datetime searchEnd = searchStart.addDays(30);
+        Set<Datetime> occupied = new Set<Datetime>();
+        for (Interview__c interview : [
+            SELECT Date_Time__c
+            FROM Interview__c
+            WHERE Interviewer__c = :interviewerId
+            AND Date_Time__c >= :searchStart
+            AND Date_Time__c <= :searchEnd
+            AND Status__c NOT IN ('Cancelled', 'No Show')
+        ]) {
+            occupied.add(interview.Date_Time__c);
         }
-        return slot;
+
+        Date candidateDate = searchStart.date().addDays(1);
+        for (Integer dayOffset = 0; dayOffset < 30; dayOffset++) {
+            Date currentDate = candidateDate.addDays(dayOffset);
+            for (Integer hour = 10; hour <= 17; hour++) {
+                Datetime slot = Datetime.newInstance(currentDate, Time.newInstance(hour, 0, 0, 0));
+                if ((slot.format('E') == 'Sat' || slot.format('E') == 'Sun') || occupied.contains(slot)) {
+                    continue;
+                }
+                return slot;
+            }
+        }
+        throw new AuraHandledException('No available interview slots found for the next 30 days.');
     }
 
     private static Boolean objectExists(String objectName) {

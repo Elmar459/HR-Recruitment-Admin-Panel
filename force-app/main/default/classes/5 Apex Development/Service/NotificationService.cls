@@ -35,14 +35,43 @@ public with sharing class NotificationService {
         SObject message = messageType.newSObject();
         putIfPresent(message, 'Channel__c', normalizeChannel(message, channel));
         putIfPresent(message, 'Related_Record_Id__c', String.valueOf(relatedId));
-        if (relatedId != null && String.valueOf(relatedId.getSObjectType()) == 'Application__c') {
-            putIfPresent(message, 'Application__c', relatedId);
-        }
+        Id applicationId = resolveApplicationId(relatedId);
+        putIfPresent(message, 'Application__c', applicationId);
         putIfPresent(message, 'Subject__c', channel + ' notification');
         putIfPresent(message, 'Body__c', body);
         putIfPresent(message, 'Direction__c', 'Outbound');
         putIfPresent(message, 'Status__c', 'Queued');
         insert message;
+    }
+
+    private static Id resolveApplicationId(Id relatedId) {
+        if (relatedId == null) {
+            return null;
+        }
+
+        String typeName = String.valueOf(relatedId.getSObjectType());
+        if (typeName == 'Application__c') {
+            return relatedId;
+        }
+        if (typeName == 'Interview__c') {
+            List<Interview__c> interviews = [
+                SELECT Application__c
+                FROM Interview__c
+                WHERE Id = :relatedId
+                LIMIT 1
+            ];
+            return interviews.isEmpty() ? null : interviews[0].Application__c;
+        }
+        if (typeName == 'Offer__c') {
+            List<Offer__c> offers = [
+                SELECT Application__c
+                FROM Offer__c
+                WHERE Id = :relatedId
+                LIMIT 1
+            ];
+            return offers.isEmpty() ? null : offers[0].Application__c;
+        }
+        return null;
     }
 
     private static String normalizeChannel(SObject record, String requestedChannel) {

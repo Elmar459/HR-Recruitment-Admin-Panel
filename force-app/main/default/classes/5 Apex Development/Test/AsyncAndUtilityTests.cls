@@ -32,9 +32,20 @@ private class AsyncAndUtilityTests {
         Application__c application = TestDataFactory.application(candidate.Id, position.Id);
         insert application;
 
+        Interview__c interview = new Interview__c(
+            Application__c = application.Id,
+            Interviewer__c = UserInfo.getUserId(),
+            Date_Time__c = System.now().addDays(2),
+            Duration__c = 60,
+            Type__c = 'Phone Screen',
+            Status__c = 'Scheduled'
+        );
+        insert interview;
+
         NotificationService.skipMessageInsertForTests = false;
         Test.startTest();
-        NotificationService.sendInterviewInvite(application.Id);
+        NotificationService.sendInterviewInvite(interview.Id);
+        NotificationService.logMessage('Interview', interview.Id, 'Interview note.');
         NotificationService.sendStatusUpdate(application.Id, 'Screening');
         NotificationService.sendOfferLetter(application.Id);
         NotificationService.sendSLABreachAlert(application.Id);
