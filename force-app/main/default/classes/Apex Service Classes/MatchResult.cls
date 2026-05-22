@@ -1,46 +1,35 @@
 public class MatchResult {
+    @AuraEnabled public Id applicationId { get; set; }
+    @AuraEnabled public Id candidateId { get; set; }
+    @AuraEnabled public Id positionId { get; set; }
     @AuraEnabled public Decimal matchScore { get; set; }
     @AuraEnabled public String matchPercentage { get; set; }
     @AuraEnabled public String matchLevel { get; set; }
-    @AuraEnabled public List<SkillMatch> skillMatches { get; set; }
+    @AuraEnabled public List<CriterionScore> breakdown { get; set; }
     @AuraEnabled public List<String> missingSkills { get; set; }
-    @AuraEnabled public List<String> strengths { get; set; }
-    @AuraEnabled public List<String> weaknesses { get; set; }
     @AuraEnabled public String summary { get; set; }
 
     public MatchResult() {
-        this.matchScore = 0;
-        this.matchPercentage = '0%';
-        this.matchLevel = 'No Match';
-        this.skillMatches = new List<SkillMatch>();
-        this.missingSkills = new List<String>();
-        this.strengths = new List<String>();
-        this.weaknesses = new List<String>();
-        this.summary = '';
+        matchScore = 0;
+        matchPercentage = '0%';
+        matchLevel = 'No Match';
+        breakdown = new List<CriterionScore>();
+        missingSkills = new List<String>();
+        summary = '';
     }
 
-    public class SkillMatch {
-        @AuraEnabled public String skillName { get; set; }
-        @AuraEnabled public String candidateProficiency { get; set; }
-        @AuraEnabled public Decimal candidateProficiencyValue { get; set; }
-        @AuraEnabled public String requiredProficiency { get; set; }
-        @AuraEnabled public Decimal requiredProficiencyValue { get; set; }
-        @AuraEnabled public Decimal proficiencyGap { get; set; }
-        @AuraEnabled public Boolean isMet { get; set; }
-        @AuraEnabled public Decimal weight { get; set; }
-        @AuraEnabled public Decimal score { get; set; }
+    public void addScore(String name, Decimal rawScore, Decimal weight) {
+        breakdown.add(new CriterionScore(name, rawScore, weight));
+    }
 
-        public SkillMatch(String skillName, String candidateProficiency, Decimal candidateProficiencyValue,
-                          String requiredProficiency, Decimal requiredProficiencyValue, Decimal weight) {
-            this.skillName = skillName;
-            this.candidateProficiency = candidateProficiency;
-            this.candidateProficiencyValue = candidateProficiencyValue;
-            this.requiredProficiency = requiredProficiency;
-            this.requiredProficiencyValue = requiredProficiencyValue;
-            this.weight = weight;
-            this.proficiencyGap = requiredProficiencyValue - candidateProficiencyValue;
-            this.isMet = candidateProficiencyValue >= requiredProficiencyValue;
-            this.score = 0;
+    public void finish() {
+        Decimal total = 0;
+        for (CriterionScore item : breakdown) {
+            total += item.weightedScore;
         }
+        matchScore = Math.min(100, total.setScale(2));
+        matchPercentage = String.valueOf(matchScore) + '%';
+        matchLevel = matchScore >= 80 ? 'Strong' : matchScore >= 60 ? 'Good' : 'Weak';
+        summary = matchLevel + ' match with ' + matchPercentage + ' total score.';
     }
 }
