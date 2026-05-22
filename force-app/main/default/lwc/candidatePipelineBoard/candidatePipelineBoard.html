@@ -1,0 +1,70 @@
+<template>
+    <lightning-card title="Candidate Pipeline Board" icon-name="standard:kanban">
+        <div class="toolbar slds-p-horizontal_medium slds-p-top_small">
+            <lightning-input
+                type="search"
+                label="Filter"
+                variant="label-hidden"
+                placeholder="Filter candidates or positions"
+                value={searchTerm}
+                onchange={handleSearch}>
+            </lightning-input>
+            <lightning-button-icon
+                icon-name="utility:refresh"
+                alternative-text="Refresh board"
+                title="Refresh board"
+                onclick={handleRefresh}
+                disabled={isBusy}>
+            </lightning-button-icon>
+        </div>
+
+        <template if:true={errorMessage}>
+            <div class="slds-p-around_medium">
+                <div class="slds-notify slds-notify_alert slds-alert_error" role="alert">
+                    <span>{errorMessage}</span>
+                </div>
+            </div>
+        </template>
+
+        <div class="board slds-p-around_medium">
+            <template for:each={visibleStages} for:item="stage">
+                <section
+                    key={stage.name}
+                    class="stage"
+                    data-status={stage.name}
+                    ondragover={handleDragOver}
+                    ondrop={handleDrop}>
+                    <header class="stage__header">
+                        <h3>{stage.name}</h3>
+                        <span>{stage.count}</span>
+                    </header>
+
+                    <div class="stage__body">
+                        <template for:each={stage.applications} for:item="app">
+                            <article
+                                key={app.id}
+                                class={app.cardClass}
+                                draggable="true"
+                                data-id={app.id}
+                                ondragstart={handleDragStart}>
+                                <div class="card__topline">
+                                    <strong>{app.candidateName}</strong>
+                                    <span>{app.matchLabel}</span>
+                                </div>
+                                <p>{app.positionName}</p>
+                                <div class="card__meta">
+                                    <span>{app.priorityLabel}</span>
+                                    <span>{app.daysLabel}</span>
+                                </div>
+                            </article>
+                        </template>
+
+                        <template if:true={stage.isEmpty}>
+                            <div class="empty">No applications</div>
+                        </template>
+                    </div>
+                </section>
+            </template>
+        </div>
+    </lightning-card>
+</template>

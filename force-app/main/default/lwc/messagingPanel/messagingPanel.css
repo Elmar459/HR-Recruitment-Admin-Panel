@@ -1,0 +1,45 @@
+.messages {
+    display: grid;
+    gap: 0.75rem;
+    max-height: 24rem;
+    overflow-y: auto;
+}
+
+.message {
+    max-width: 85%;
+    padding: 0.75rem;
+    border-radius: 0.25rem;
+}
+
+.message p {
+    margin: 0 0 0.35rem;
+    white-space: pre-wrap;
+}
+
+.message span {
+    color: var(--slds-g-color-neutral-base-40, #5c5c5c);
+    font-size: 0.75rem;
+}
+
+.message_outbound {
+    justify-self: end;
+    background: #eaf4ff;
+}
+
+.message_inbound {
+    justify-self: start;
+    background: var(--slds-g-color-neutral-base-95, #f3f3f3);
+}
+
+.composer {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.75rem;
+    align-items: end;
+}
+
+.empty {
+    padding: 1rem;
+    text-align: center;
+    color: var(--slds-g-color-neutral-base-40, #5c5c5c);
+}

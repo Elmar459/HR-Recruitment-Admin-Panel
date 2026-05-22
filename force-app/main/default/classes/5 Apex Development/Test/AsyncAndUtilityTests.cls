@@ -20,4 +20,31 @@ private class AsyncAndUtilityTests {
         Test.stopTest();
         System.assert(true);
     }
+
+    @IsTest
+    static void coversNotificationFacadeMethods() {
+        Candidate__c candidate = TestDataFactory.candidate('notify@example.com');
+        insert candidate;
+
+        Position__c position = TestDataFactory.position();
+        insert position;
+
+        Application__c application = TestDataFactory.application(candidate.Id, position.Id);
+        insert application;
+
+        NotificationService.skipMessageInsertForTests = false;
+        Test.startTest();
+        NotificationService.sendInterviewInvite(application.Id);
+        NotificationService.sendStatusUpdate(application.Id, 'Screening');
+        NotificationService.sendOfferLetter(application.Id);
+        NotificationService.sendSLABreachAlert(application.Id);
+        Test.stopTest();
+
+        System.assertEquals(1, [
+            SELECT COUNT()
+            FROM Task
+            WHERE WhatId = :application.Id
+            AND Subject = 'SLA breach follow-up'
+        ]);
+    }
 }

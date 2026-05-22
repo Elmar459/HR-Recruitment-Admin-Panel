@@ -1,0 +1,34 @@
+<template>
+    <lightning-card title="Recruitment Messages" icon-name="standard:messaging_session">
+        <div class="messages slds-p-around_medium">
+            <template for:each={decoratedMessages} for:item="message">
+                <article key={message.key} class={message.messageClass}>
+                    <p>{message.body}</p>
+                    <span>{message.meta}</span>
+                </article>
+            </template>
+
+            <template if:true={isEmpty}>
+                <div class="empty">No messages yet</div>
+            </template>
+        </div>
+
+        <div class="composer slds-p-horizontal_medium slds-p-bottom_medium">
+            <lightning-textarea
+                label="Message"
+                variant="label-hidden"
+                placeholder="Write a message"
+                value={draft}
+                onchange={handleDraftChange}>
+            </lightning-textarea>
+            <lightning-button-icon
+                icon-name="utility:send"
+                alternative-text="Send message"
+                title="Send message"
+                variant="brand"
+                onclick={handleSend}
+                disabled={sendDisabled}>
+            </lightning-button-icon>
+        </div>
+    </lightning-card>
+</template>

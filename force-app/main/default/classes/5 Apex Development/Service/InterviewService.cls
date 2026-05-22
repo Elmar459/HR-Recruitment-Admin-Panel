@@ -6,12 +6,13 @@ public with sharing class InterviewService {
             Application__c = applicationId,
             Interviewer__c = interviewerId,
             Date_Time__c = startTime,
+            Duration__c = 60,
             Type__c = interviewType,
             Status__c = 'Scheduled'
         );
         insert interview;
         NotificationService.sendInterviewInvite(interview.Id);
-        update new Application__c(Id = applicationId, Status__c = 'Interview 1');
+        ApplicationTriggerHandler.advanceStage(applicationId);
         return interview.Id;
     }
 
