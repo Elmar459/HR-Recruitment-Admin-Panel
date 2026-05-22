@@ -2,6 +2,7 @@ import { createElement } from '@lwc/engine-dom';
 import MessagingPanel from 'c/messagingPanel';
 import getMessages from '@salesforce/apex/RecruitmentLwcController.getMessages';
 import sendMessage from '@salesforce/apex/RecruitmentLwcController.sendMessage';
+import getChatterPosts from '@salesforce/apex/RecruitmentLwcController.getChatterPosts';
 
 jest.mock(
     '@salesforce/apex/RecruitmentLwcController.getMessages',
@@ -16,6 +17,41 @@ jest.mock(
 
 jest.mock(
     '@salesforce/apex/RecruitmentLwcController.sendMessage',
+    () => ({
+        default: jest.fn()
+    }),
+    { virtual: true }
+);
+
+jest.mock(
+    '@salesforce/apex/RecruitmentLwcController.getChatterPosts',
+    () => {
+        const { createApexTestWireAdapter } = require('@salesforce/sfdx-lwc-jest');
+        return {
+            default: createApexTestWireAdapter(jest.fn())
+        };
+    },
+    { virtual: true }
+);
+
+jest.mock(
+    '@salesforce/apex/RecruitmentLwcController.postToChatter',
+    () => ({
+        default: jest.fn()
+    }),
+    { virtual: true }
+);
+
+jest.mock(
+    '@salesforce/apex/RecruitmentLwcController.markAllMessagesRead',
+    () => ({
+        default: jest.fn()
+    }),
+    { virtual: true }
+);
+
+jest.mock(
+    '@salesforce/apex/RecruitmentLwcController.publishTypingIndicator',
     () => ({
         default: jest.fn()
     }),
@@ -47,6 +83,7 @@ describe('c-messaging-panel', () => {
             id: 'msg2',
             body: 'Follow-up sent',
             direction: 'Outbound',
+            channel: 'Portal',
             createdByName: 'Recruiter'
         });
 
@@ -61,10 +98,12 @@ describe('c-messaging-panel', () => {
                 id: 'msg1',
                 body: 'Welcome to the process',
                 direction: 'Outbound',
+                channel: 'Portal',
                 createdByName: 'Recruiter',
                 createdDate: '2026-05-22T10:00:00.000Z'
             }
         ]);
+        getChatterPosts.emit([]);
         await flushPromises();
 
         expect(element.shadowRoot.textContent).toContain('Welcome to the process');
@@ -72,12 +111,13 @@ describe('c-messaging-panel', () => {
         const textarea = element.shadowRoot.querySelector('lightning-textarea');
         textarea.value = 'Follow-up sent';
         textarea.dispatchEvent(new CustomEvent('change'));
-        element.shadowRoot.querySelector('lightning-button-icon').click();
+        element.shadowRoot.querySelector('lightning-button').click();
         await flushPromises();
 
         expect(sendMessage).toHaveBeenCalledWith({
             applicationId: 'a01xx0000000001',
-            body: 'Follow-up sent'
+            body: 'Follow-up sent',
+            channel: 'Portal'
         });
     });
 });

@@ -106,13 +106,23 @@ private class RecruitmentLwcControllerTest {
 
         Test.startTest();
         RecruitmentLwcController.MessageItem sent =
-            RecruitmentLwcController.sendMessage(application.Id, 'Candidate confirmed availability.');
+            RecruitmentLwcController.sendMessage(application.Id, 'Candidate confirmed availability.', 'Email');
         List<RecruitmentLwcController.MessageItem> messages =
             RecruitmentLwcController.getMessages(application.Id);
+        Integer readCount = RecruitmentLwcController.markAllMessagesRead(application.Id);
+        RecruitmentLwcController.publishTypingIndicator(application.Id, true);
+        RecruitmentLwcController.ChatterItem chatter =
+            RecruitmentLwcController.postToChatter(application.Id, 'Chatter update from test.');
+        List<RecruitmentLwcController.ChatterItem> posts =
+            RecruitmentLwcController.getChatterPosts(application.Id);
         Test.stopTest();
 
         System.assertEquals('Candidate confirmed availability.', sent.body);
+        System.assertEquals('Email', sent.channel);
         System.assertNotEquals(null, messages, 'Message query should always return a list.');
+        System.assert(readCount >= 0);
+        System.assertNotEquals(null, chatter.id);
+        System.assert(!posts.isEmpty());
     }
 
     @IsTest
@@ -147,7 +157,7 @@ private class RecruitmentLwcControllerTest {
     @IsTest
     static void validatesInputs() {
         try {
-            RecruitmentLwcController.sendMessage(null, null);
+            RecruitmentLwcController.sendMessage(null, null, null);
             System.assert(false, 'Expected validation failure.');
         } catch (AuraHandledException e) {
             System.assert(true);

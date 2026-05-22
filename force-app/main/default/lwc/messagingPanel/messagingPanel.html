@@ -1,34 +1,110 @@
 <template>
     <lightning-card title="Recruitment Messages" icon-name="standard:messaging_session">
-        <div class="messages slds-p-around_medium">
-            <template for:each={decoratedMessages} for:item="message">
-                <article key={message.key} class={message.messageClass}>
-                    <p>{message.body}</p>
-                    <span>{message.meta}</span>
-                </article>
-            </template>
+        <div class="mp-shell">
+            <div class="mp-toolbar">
+                <div class="mp-badges">
+                    <lightning-badge label={unreadLabel}></lightning-badge>
+                    <lightning-badge label={connectionLabel}></lightning-badge>
+                </div>
+                <div class="mp-filters">
+                    <lightning-combobox
+                        label="Direction"
+                        variant="label-hidden"
+                        value={directionFilter}
+                        options={directionOptions}
+                        onchange={handleDirectionFilterChange}>
+                    </lightning-combobox>
+                    <lightning-combobox
+                        label="Channel"
+                        variant="label-hidden"
+                        value={channelFilter}
+                        options={channelFilterOptions}
+                        onchange={handleChannelFilterChange}>
+                    </lightning-combobox>
+                    <lightning-button
+                        label="Mark all read"
+                        icon-name="utility:check"
+                        onclick={handleMarkAllRead}>
+                    </lightning-button>
+                </div>
+            </div>
 
-            <template if:true={isEmpty}>
-                <div class="empty">No messages yet</div>
-            </template>
-        </div>
+            <section class="mp-messages" aria-label="Message history">
+                <template for:each={decoratedMessages} for:item="message">
+                    <article key={message.key} class={message.messageClass}>
+                        <div class="mp-message-meta">
+                            <lightning-icon icon-name={message.channelIcon} size="xx-small"></lightning-icon>
+                            <strong>{message.sender}</strong>
+                            <span>{message.createdLabel}</span>
+                            <span class={message.unreadClass}></span>
+                        </div>
+                        <p>{message.body}</p>
+                    </article>
+                </template>
 
-        <div class="composer slds-p-horizontal_medium slds-p-bottom_medium">
-            <lightning-textarea
-                label="Message"
-                variant="label-hidden"
-                placeholder="Write a message"
-                value={draft}
-                onchange={handleDraftChange}>
-            </lightning-textarea>
-            <lightning-button-icon
-                icon-name="utility:send"
-                alternative-text="Send message"
-                title="Send message"
-                variant="brand"
-                onclick={handleSend}
-                disabled={sendDisabled}>
-            </lightning-button-icon>
+                <template if:true={isTyping}>
+                    <div class="mp-typing">Agent is typing...</div>
+                </template>
+
+                <template if:true={isEmpty}>
+                    <div class="mp-empty">No messages yet</div>
+                </template>
+            </section>
+
+            <div class="mp-composer">
+                <lightning-combobox
+                    label="Channel"
+                    value={selectedChannel}
+                    options={channelOptions}
+                    onchange={handleChannelChange}>
+                </lightning-combobox>
+                <lightning-textarea
+                    label="Message"
+                    placeholder="Write a message"
+                    value={draft}
+                    onchange={handleDraftChange}>
+                </lightning-textarea>
+                <lightning-button
+                    label="Send"
+                    icon-name="utility:send"
+                    variant="brand"
+                    onclick={handleSend}
+                    disabled={sendDisabled}>
+                </lightning-button>
+            </div>
+
+            <section class="mp-chatter" aria-label="Chatter feed">
+                <div class="mp-section-header">
+                    <h3>Chatter Feed</h3>
+                </div>
+                <div class="mp-chatter-composer">
+                    <lightning-textarea
+                        label="Chatter post"
+                        variant="label-hidden"
+                        placeholder="Post to Chatter"
+                        value={chatterDraft}
+                        onchange={handleChatterDraftChange}>
+                    </lightning-textarea>
+                    <lightning-button
+                        label="Post to Chatter"
+                        icon-name="utility:share_post"
+                        onclick={handlePostToChatter}
+                        disabled={postDisabled}>
+                    </lightning-button>
+                </div>
+                <div class="mp-chatter-list">
+                    <template for:each={decoratedChatterPosts} for:item="post">
+                        <article key={post.id} class="mp-chatter-post">
+                            <strong>{post.author}</strong>
+                            <span>{post.createdLabel}</span>
+                            <p>{post.body}</p>
+                        </article>
+                    </template>
+                    <template if:true={isChatterEmpty}>
+                        <div class="mp-empty">No Chatter posts yet</div>
+                    </template>
+                </div>
+            </section>
         </div>
     </lightning-card>
 </template>

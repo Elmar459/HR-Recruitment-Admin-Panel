@@ -120,7 +120,7 @@ public with sharing class RecruitmentLwcController {
     }
 
     @AuraEnabled
-    public static MessageItem sendMessage(Id applicationId, String body) {
+    public static MessageItem sendMessage(Id applicationId, String body, String channel) {
         if (applicationId == null || String.isBlank(body)) {
             throw new AuraHandledException('Application and message body are required.');
         }
@@ -128,9 +128,12 @@ public with sharing class RecruitmentLwcController {
         MessageItem item = new MessageItem();
         item.applicationId = applicationId;
         item.body = body.trim();
+        item.channel = normalizeMessageChannel(channel);
         item.direction = 'Outbound';
         item.createdDate = System.now();
         item.createdByName = UserInfo.getName();
+        item.senderName = UserInfo.getName();
+        item.isRead = true;
 
         if (objectExists(MESSAGE_OBJECT)) {
             SObject message = Schema.getGlobalDescribe().get(MESSAGE_OBJECT).newSObject();
@@ -139,14 +142,98 @@ public with sharing class RecruitmentLwcController {
             putIfPresent(message, 'Body__c', item.body);
             putIfPresent(message, 'Subject__c', 'Recruitment message');
             putIfPresent(message, 'Direction__c', item.direction);
-            putIfPresent(message, 'Channel__c', 'Portal');
+            putIfPresent(message, 'Channel__c', item.channel);
+            putIfPresent(message, 'Sender__c', UserInfo.getUserId());
+            putIfPresent(message, 'Sent_At__c', item.createdDate);
+            putIfPresent(message, 'Is_Read__c', true);
             putIfPresent(message, 'Status__c', 'Sent');
             insert message;
             item.id = (Id) message.get('Id');
         }
 
         publishMessageEvent(item);
+        NotificationService.sendStatusUpdate(applicationId, 'Message sent via ' + item.channel);
         return item;
+    }
+
+    @AuraEnabled(cacheable=true)
+    public static List<ChatterItem> getChatterPosts(Id applicationId) {
+        List<ChatterItem> posts = new List<ChatterItem>();
+        if (applicationId == null) {
+            return posts;
+        }
+        for (FeedItem item : [
+            SELECT Id, Body, CreatedDate, CreatedBy.Name
+            FROM FeedItem
+            WHERE ParentId = :applicationId
+            ORDER BY CreatedDate DESC
+            LIMIT 20
+        ]) {
+            ChatterItem post = new ChatterItem();
+            post.id = item.Id;
+            post.body = item.Body;
+            post.createdDate = item.CreatedDate;
+            post.createdByName = item.CreatedBy.Name;
+            posts.add(post);
+        }
+        return posts;
+    }
+
+    @AuraEnabled
+    public static ChatterItem postToChatter(Id applicationId, String body) {
+        if (applicationId == null || String.isBlank(body)) {
+            throw new AuraHandledException('Application and Chatter body are required.');
+        }
+        FeedItem post = new FeedItem(
+            ParentId = applicationId,
+            Body = body.trim()
+        );
+        insert post;
+
+        post = [
+            SELECT Id, Body, CreatedDate, CreatedBy.Name
+            FROM FeedItem
+            WHERE Id = :post.Id
+            LIMIT 1
+        ];
+
+        ChatterItem item = new ChatterItem();
+        item.id = post.Id;
+        item.body = post.Body;
+        item.createdDate = post.CreatedDate;
+        item.createdByName = post.CreatedBy.Name;
+        return item;
+    }
+
+    @AuraEnabled
+    public static Integer markAllMessagesRead(Id applicationId) {
+        if (applicationId == null || !objectExists(MESSAGE_OBJECT) || !fieldExists(MESSAGE_OBJECT, 'Is_Read__c')) {
+            return 0;
+        }
+        List<SObject> unread = Database.query(
+            'SELECT Id, Is_Read__c FROM Message__c WHERE Application__c = \'' +
+            String.escapeSingleQuotes(String.valueOf(applicationId)) + '\' AND Is_Read__c = false'
+        );
+        for (SObject message : unread) {
+            message.put('Is_Read__c', true);
+        }
+        if (!unread.isEmpty()) {
+            update unread;
+        }
+        return unread.size();
+    }
+
+    @AuraEnabled
+    public static void publishTypingIndicator(Id applicationId, Boolean isTyping) {
+        if (applicationId == null || !objectExists(MESSAGE_EVENT)) {
+            return;
+        }
+        SObject eventRecord = Schema.getGlobalDescribe().get(MESSAGE_EVENT).newSObject();
+        putIfPresent(eventRecord, 'Application_Id__c', String.valueOf(applicationId));
+        putIfPresent(eventRecord, 'Direction__c', 'Outbound');
+        putIfPresent(eventRecord, 'Sender_Name__c', UserInfo.getName());
+        putIfPresent(eventRecord, 'Is_Typing__c', isTyping == true);
+        EventBus.publish(eventRecord);
     }
 
     private static PipelineCard toPipelineCard(SObject app) {
@@ -308,7 +395,10 @@ public with sharing class RecruitmentLwcController {
         item.id = (Id) message.get('Id');
         item.body = asString(getIfPresent(message, 'Body__c'));
         item.direction = asString(getIfPresent(message, 'Direction__c'));
-        item.createdDate = (Datetime) getIfPresent(message, 'CreatedDate');
+        item.channel = asString(getIfPresent(message, 'Channel__c'));
+        item.isRead = asBoolean(getIfPresent(message, 'Is_Read__c'));
+        item.createdDate = (Datetime) getFirstPresent(message, new List<String>{ 'Sent_At__c', 'CreatedDate' });
+        item.senderName = relatedName(message, 'Sender__r');
         item.createdByName = relatedName(message, 'CreatedBy');
         return item;
     }
@@ -378,13 +468,17 @@ public with sharing class RecruitmentLwcController {
         List<String> fields = new List<String>{ 'Id', 'CreatedDate', 'CreatedBy.Name' };
         addField(fields, MESSAGE_OBJECT, 'Body__c');
         addField(fields, MESSAGE_OBJECT, 'Direction__c');
+        addField(fields, MESSAGE_OBJECT, 'Channel__c');
+        addField(fields, MESSAGE_OBJECT, 'Is_Read__c');
+        addField(fields, MESSAGE_OBJECT, 'Sent_At__c');
+        fields.add('Sender__r.Name');
 
         String whereClause = fieldExists(MESSAGE_OBJECT, 'Application__c')
             ? 'Application__c = \'' + String.escapeSingleQuotes(String.valueOf(applicationId)) + '\''
             : 'Related_Record_Id__c = \'' + String.escapeSingleQuotes(String.valueOf(applicationId)) + '\'';
 
         return 'SELECT ' + String.join(fields, ',')
-            + ' FROM Message__c WHERE ' + whereClause + ' ORDER BY CreatedDate ASC LIMIT 100';
+            + ' FROM Message__c WHERE ' + whereClause + ' ORDER BY CreatedDate ASC LIMIT 200';
     }
 
     private static Boolean hasMessageLinkField() {
@@ -410,6 +504,12 @@ public with sharing class RecruitmentLwcController {
             statuses.addAll(new List<String>{ 'New', 'Screening', 'Interview 1', 'Interview 2', 'Offer', 'Hired', 'Rejected' });
         }
         return statuses;
+    }
+
+    private static String normalizeMessageChannel(String channel) {
+        String value = String.isBlank(channel) ? 'Portal' : channel;
+        Set<String> allowed = new Set<String>{ 'Email', 'Portal' };
+        return allowed.contains(value) ? value : 'Portal';
     }
 
     private static List<StatusOption> getStatusOptions(String currentStatus) {
@@ -442,6 +542,9 @@ public with sharing class RecruitmentLwcController {
         putIfPresent(eventRecord, 'Application_Id__c', String.valueOf(item.applicationId));
         putIfPresent(eventRecord, 'Message_Body__c', item.body);
         putIfPresent(eventRecord, 'Direction__c', item.direction);
+        putIfPresent(eventRecord, 'Channel__c', item.channel);
+        putIfPresent(eventRecord, 'Sender_Name__c', item.senderName);
+        putIfPresent(eventRecord, 'Is_Typing__c', false);
         EventBus.publish(eventRecord);
     }
 
@@ -663,6 +766,16 @@ public with sharing class RecruitmentLwcController {
         @AuraEnabled public Id applicationId;
         @AuraEnabled public String body;
         @AuraEnabled public String direction;
+        @AuraEnabled public String channel;
+        @AuraEnabled public Boolean isRead;
+        @AuraEnabled public Datetime createdDate;
+        @AuraEnabled public String senderName;
+        @AuraEnabled public String createdByName;
+    }
+
+    public class ChatterItem {
+        @AuraEnabled public Id id;
+        @AuraEnabled public String body;
         @AuraEnabled public Datetime createdDate;
         @AuraEnabled public String createdByName;
     }
