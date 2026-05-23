@@ -110,13 +110,13 @@
             </div>
         </template>
 
-        <div class="slds-scrollable_x slds-p-around_medium">
-        <div class="board slds-grid slds-grid_align-spread" style="min-width: max-content; gap: 0.75rem;">
+        <div class="scroll-container" style="overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 0.75rem;">
+        <div class="board" style="display: inline-flex; flex-wrap: nowrap; gap: 0.75rem; align-items: flex-start;">
             <template for:each={visibleStages} for:item="stage">
                 <section
                     key={stage.name}
-                    class="stage slds-shrink-none"
-                    style="width: 18rem; min-height: 24rem;"
+                    class="stage"
+                    style="flex: 0 0 18rem; min-height: 24rem;"
                     data-status={stage.name}
                     ondragover={handleDragOver}
                     ondrop={handleDrop}>

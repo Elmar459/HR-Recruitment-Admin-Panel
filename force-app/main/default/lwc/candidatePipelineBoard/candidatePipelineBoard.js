@@ -1,7 +1,6 @@
-import { LightningElement, wire } from 'lwc';
-import { refreshApex } from '@salesforce/apex';
+import { LightningElement } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
-import { subscribe, unsubscribe, onError } from 'lightning/empApi';
+import { subscribe, onError } from 'lightning/empApi';
 import getPipelineBoard from '@salesforce/apex/RecruitmentLwcController.getPipelineBoard';
 import updateApplicationStatus from '@salesforce/apex/RecruitmentLwcController.updateApplicationStatus';
 import getFilterOptions from '@salesforce/apex/RecruitmentLwcController.getFilterOptions';
@@ -12,7 +11,6 @@ const PIPELINE_CHANNEL = '/event/Application_Pipeline_Update__e';
 export default class CandidatePipelineBoard extends LightningElement {
     searchTerm = '';
     draggedApplicationId;
-    wiredBoard;
     stages = [];
     isBusy = false;
     errorMessage;
@@ -54,35 +52,17 @@ export default class CandidatePipelineBoard extends LightningElement {
         try {
             this.isBusy = true;
             const result = await getPipelineBoard();
-            console.log('Pipeline board data received:', result);
-            console.log('Type:', typeof result);
-            console.log('Is Array:', Array.isArray(result));
-            
             if (Array.isArray(result) && result.length > 0) {
-                console.log('Data is valid array with ' + result.length + ' stages');
                 this.stages = result;
             } else {
-                console.warn('Data is empty or invalid, using defaults');
                 this.stages = this.getDefaultStages();
             }
             this.errorMessage = undefined;
         } catch (error) {
-            console.error('Error loading board:', error);
             this.errorMessage = 'Error loading pipeline: ' + this.reduceError(error);
             this.stages = this.getDefaultStages();
         } finally {
             this.isBusy = false;
-        }
-    }
-
-    handleRefresh() {
-        this.refreshBoard();
-        this.refreshApex();
-    }
-
-    refreshApex() {
-        if (this.wiredBoard) {
-            refreshApex(this.wiredBoard);
         }
     }
 
@@ -205,7 +185,7 @@ export default class CandidatePipelineBoard extends LightningElement {
                 applicationId: this.draggedApplicationId,
                 newStatus: status
             });
-            await refreshApex(this.wiredBoard);
+            await this.refreshBoard();
             this.showToast('Pipeline updated', `Application moved to ${status}.`, 'success');
         } catch (error) {
             this.showToast('Could not update pipeline', this.reduceError(error), 'error');
@@ -215,13 +195,8 @@ export default class CandidatePipelineBoard extends LightningElement {
         }
     }
 
-    async handleRefresh() {
-        this.isBusy = true;
-        try {
-            await refreshApex(this.wiredBoard);
-        } finally {
-            this.isBusy = false;
-        }
+    handleRefresh() {
+        this.refreshBoard();
     }
 
     handleMassReject() {
@@ -251,7 +226,7 @@ export default class CandidatePipelineBoard extends LightningElement {
                 applicationIds: Array.from(this.selectedApplicationIds),
                 action: this.bulkAction
             });
-            await refreshApex(this.wiredBoard);
+            await this.refreshBoard();
             this.selectedApplicationIds.clear();
             this.showToast(
                 'Bulk action completed',
@@ -273,9 +248,7 @@ export default class CandidatePipelineBoard extends LightningElement {
     async subscribeToPipelineUpdates() {
         try {
             this.subscription = await subscribe(PIPELINE_CHANNEL, -1, async () => {
-                if (this.wiredBoard) {
-                    await refreshApex(this.wiredBoard);
-                }
+                await this.refreshBoard();
             });
         } catch (error) {
             this.subscription = undefined;

@@ -1,6 +1,5 @@
 :host {
     display: block;
-    overflow-x: auto;
 }
 
 .toolbar {
@@ -15,18 +14,20 @@
     gap: 0.5rem;
 }
 
+.scroll-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
 .board {
-    display: flex;
+    display: inline-flex;
     flex-wrap: nowrap;
     gap: 0.75rem;
     align-items: flex-start;
-    min-width: max-content;
     padding-bottom: 0.5rem;
 }
 
 .stage {
-    flex: 0 0 18rem;
-    min-height: 24rem;
     border: 1px solid var(--slds-g-color-border-base-1, #dddbda);
     border-radius: 0.25rem;
     background: var(--slds-g-color-neutral-base-95, #f3f3f3);
