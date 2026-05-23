@@ -9,13 +9,97 @@
                 value={searchTerm}
                 onchange={handleSearch}>
             </lightning-input>
-            <lightning-button-icon
-                icon-name="utility:refresh"
-                alternative-text="Refresh board"
-                title="Refresh board"
-                onclick={handleRefresh}
+            <div class="toolbar-actions">
+                <lightning-button-icon
+                    icon-name="utility:filterList"
+                    alternative-text="Toggle filters"
+                    title="Toggle filters"
+                    onclick={handleToggleFilters}>
+                </lightning-button-icon>
+                <lightning-button-icon
+                    icon-name="utility:refresh"
+                    alternative-text="Refresh board"
+                    title="Refresh board"
+                    onclick={handleRefresh}
+                    disabled={isBusy}>
+                </lightning-button-icon>
+            </div>
+        </div>
+
+        <template if:true={showFilters}>
+            <div class="filters slds-p-horizontal_medium slds-p-vertical_small">
+                <div class="filter-row">
+                    <lightning-combobox
+                        label="Department"
+                        value={departmentFilter}
+                        options={departmentOptions}
+                        onchange={handleDepartmentFilterChange}>
+                    </lightning-combobox>
+                    <lightning-combobox
+                        label="Recruiter"
+                        value={recruiterFilter}
+                        options={recruiterOptions}
+                        onchange={handleRecruiterFilterChange}>
+                    </lightning-combobox>
+                    <lightning-combobox
+                        label="Position"
+                        value={positionFilter}
+                        options={positionOptions}
+                        onchange={handlePositionFilterChange}>
+                    </lightning-combobox>
+                    <lightning-input
+                        type="date"
+                        label="From Date"
+                        value={dateFromFilter}
+                        onchange={handleDateFromFilterChange}>
+                    </lightning-input>
+                    <lightning-input
+                        type="date"
+                        label="To Date"
+                        value={dateToFilter}
+                        onchange={handleDateToFilterChange}>
+                    </lightning-input>
+                    <lightning-combobox
+                        label="SLA Status"
+                        value={slaStatusFilter}
+                        options={slaStatusOptions}
+                        onchange={handleSlaStatusFilterChange}>
+                    </lightning-combobox>
+                </div>
+
+                <div class="filter-toggles">
+                    <lightning-input
+                        type="checkbox"
+                        label="Top Matches (≥70%)"
+                        checked={showTopMatches}
+                        onchange={handleTopMatchesToggle}>
+                    </lightning-input>
+                    <lightning-input
+                        type="checkbox"
+                        label="Sort by Score"
+                        checked={sortByScore}
+                        onchange={handleSortByScoreToggle}>
+                    </lightning-input>
+                </div>
+            </div>
+        </template>
+
+        <div class="bulk-actions slds-p-horizontal_medium slds-p-vertical_small">
+            <lightning-button
+                label="Mass Reject"
+                icon-name="utility:close"
+                variant="destructive-text"
+                onclick={handleMassReject}
                 disabled={isBusy}>
-            </lightning-button-icon>
+            </lightning-button>
+            <lightning-button
+                label="Mass Advance"
+                icon-name="utility:forward"
+                variant="success"
+                onclick={handleMassAdvance}
+                disabled={isBusy}>
+            </lightning-button>
+            <span class="selection-count">({selectedApplicationIds.size} selected)</span>
         </div>
 
         <template if:true={errorMessage}>
@@ -46,10 +130,18 @@
                                 class={app.cardClass}
                                 draggable="true"
                                 data-id={app.id}
-                                ondragstart={handleDragStart}>
+                                ondragstart={handleDragStart}
+                                onclick={handleCardSelect}>
                                 <div class="card__topline">
                                     <strong>{app.candidateName}</strong>
-                                    <span>{app.matchLabel}</span>
+                                    <span class={app.scoreClass}>{app.matchLabel}</span>
+                                    <template if:true={app.slaBreached}>
+                                        <lightning-icon
+                                            icon-name="utility:clock"
+                                            size="small"
+                                            class="sla-icon">
+                                        </lightning-icon>
+                                    </template>
                                 </div>
                                 <p>{app.positionName}</p>
                                 <div class="card__meta">
@@ -66,5 +158,30 @@
                 </section>
             </template>
         </div>
+
+        <template if:true={showBulkModal}>
+            <div class="modal-backdrop">
+                <div class="modal">
+                    <div class="modal-header">
+                        <h2>Confirm Bulk Action</h2>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure you want to {bulkAction} {selectedApplicationIds.size} applications?</p>
+                    </div>
+                    <div class="modal-footer">
+                        <lightning-button
+                            label="Cancel"
+                            onclick={handleBulkCancel}>
+                        </lightning-button>
+                        <lightning-button
+                            label="Confirm"
+                            variant="brand"
+                            onclick={handleBulkConfirm}
+                            disabled={isBusy}>
+                        </lightning-button>
+                    </div>
+                </div>
+            </div>
+        </template>
     </lightning-card>
 </template>
