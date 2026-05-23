@@ -24,6 +24,9 @@ public with sharing class InterviewTriggerHandler {
                 );
             }
         }
+        
+        // 7.1 Chatter - Post interview completed event
+        ChatterService.postInterviewCompleted(interviews, oldMap);
     }
 
     private static void validateSequence(List<Interview__c> interviews) {

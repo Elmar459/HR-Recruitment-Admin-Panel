@@ -7,6 +7,6 @@
     <columns>CREATED_DATE</columns>
     <columns>Match_Score__c</columns>
     <columns>Status__c</columns>
-    <filterScope>Mine</filterScope>
+    <filterScope>Everything</filterScope>
     <label>Main</label>
 </ListView>

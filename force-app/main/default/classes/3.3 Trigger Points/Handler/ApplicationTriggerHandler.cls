@@ -36,9 +36,15 @@ public with sharing class ApplicationTriggerHandler {
             ));
         }
         if (!updates.isEmpty()) update updates;
+        
+        // 7.1 Chatter - Post application created event
+        ChatterService.postApplicationCreated(apps);
     }
 
     public static void afterUpdate(List<Application__c> apps, Map<Id, Application__c> oldMap) {
+        // 7.1 Chatter - Post status changed event
+        ChatterService.postStatusChanged(oldMap, apps);
+        
         for (Application__c app : apps) {
             Application__c oldApp = oldMap.get(app.Id);
             if (app.Status__c == 'Screening' && oldApp.Status__c != app.Status__c) {
@@ -49,6 +55,9 @@ public with sharing class ApplicationTriggerHandler {
                 System.enqueueJob(new NotificationQueueable(app.Id, app.Status__c));
             }
         }
+        
+        // 7.1 Chatter - Post SLA breach alert
+        ChatterService.postSLABreach(apps);
     }
 
     public static void advanceStage(Id applicationId) {
