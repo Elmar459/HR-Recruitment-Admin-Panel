@@ -11,14 +11,16 @@
 }
 
 .board {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(16rem, 1fr);
+    display: flex;
+    flex-wrap: nowrap;
     gap: 0.75rem;
     overflow-x: auto;
+    align-items: flex-start;
+    padding-bottom: 0.5rem;
 }
 
 .stage {
+    flex: 0 0 18rem;
     min-height: 24rem;
     border: 1px solid var(--slds-g-color-border-base-1, #dddbda);
     border-radius: 0.25rem;
