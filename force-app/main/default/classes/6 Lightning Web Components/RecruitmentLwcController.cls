@@ -6,7 +6,7 @@ public with sharing class RecruitmentLwcController {
     private static final String MESSAGE_EVENT = 'Recruitment_Message__e';
     private static final String PIPELINE_EVENT = 'Application_Pipeline_Update__e';
 
-    @AuraEnabled(cacheable=true)
+    @AuraEnabled
     public static List<PipelineStage> getPipelineBoard() {
         List<String> statuses = getApplicationStatuses();
         Map<String, PipelineStage> stagesByStatus = new Map<String, PipelineStage>();
@@ -18,17 +18,26 @@ public with sharing class RecruitmentLwcController {
             return stagesByStatus.values();
         }
 
-        for (SObject app : Database.query(buildApplicationQuery())) {
+        String query = buildApplicationQuery();
+        System.debug('Query: ' + query);
+        List<SObject> apps = Database.query(query);
+        System.debug('Total apps fetched: ' + apps.size());
+        
+        for (SObject app : apps) {
             String status = asString(getIfPresent(app, 'Status__c'));
             if (String.isBlank(status)) {
                 status = 'New';
             }
+            System.debug('Processing app with status: ' + status);
             if (!stagesByStatus.containsKey(status)) {
                 stagesByStatus.put(status, new PipelineStage(status));
             }
-            stagesByStatus.get(status).applications.add(toPipelineCard(app));
+            PipelineCard card = toPipelineCard(app);
+            System.debug('Card created: ' + card.candidateName + ' | Score: ' + card.matchScore);
+            stagesByStatus.get(status).applications.add(card);
         }
 
+        System.debug('Final stages: ' + stagesByStatus.keySet());
         return stagesByStatus.values();
     }
 
@@ -246,7 +255,10 @@ public with sharing class RecruitmentLwcController {
         card.appliedDate = (Date) getIfPresent(app, 'Applied_Date__c');
         card.daysInStage = asDecimal(getIfPresent(app, 'Days_in_Stage__c'));
         card.slaBreached = asBoolean(getIfPresent(app, 'SLA_Breach__c'));
+        card.slaAtRisk = (card.daysInStage != null && card.daysInStage >= 5 && !card.slaBreached);
         card.priority = relatedField(app, 'Position__r', 'Priority__c');
+        card.department = asString(getIfPresent(app, 'Department__c'));
+        card.recruiter = relatedName(app, 'Recruiter__r');
         return card;
     }
 
@@ -409,11 +421,13 @@ public with sharing class RecruitmentLwcController {
         addField(fields, APPLICATION_OBJECT, 'Match_Score__c');
         addField(fields, APPLICATION_OBJECT, 'Days_in_Stage__c');
         addField(fields, APPLICATION_OBJECT, 'SLA_Breach__c');
+        addField(fields, APPLICATION_OBJECT, 'Department__c');
         fields.add('Candidate__r.Name');
         addRelationshipField(fields, 'Candidate__r', 'First_Name__c');
         addRelationshipField(fields, 'Candidate__r', 'Last_Name__c');
         fields.add('Position__r.Name');
         addRelationshipField(fields, 'Position__r', 'Priority__c');
+        fields.add('Recruiter__r.Name');
         return 'SELECT ' + String.join(fields, ',')
             + ' FROM Application__c ORDER BY Status__c, SLA_Breach__c DESC, Match_Score__c DESC NULLS LAST';
     }
@@ -686,7 +700,10 @@ public with sharing class RecruitmentLwcController {
         @AuraEnabled public Date appliedDate;
         @AuraEnabled public Decimal daysInStage;
         @AuraEnabled public Boolean slaBreached;
+        @AuraEnabled public Boolean slaAtRisk;
         @AuraEnabled public String priority;
+        @AuraEnabled public String department;
+        @AuraEnabled public String recruiter;
     }
 
     public class TimelinePayload {
@@ -771,6 +788,98 @@ public with sharing class RecruitmentLwcController {
         @AuraEnabled public Datetime createdDate;
         @AuraEnabled public String senderName;
         @AuraEnabled public String createdByName;
+    }
+
+    @AuraEnabled
+    public static FilterOptions getFilterOptions() {
+        FilterOptions options = new FilterOptions();
+
+        try {
+            if (!objectExists(APPLICATION_OBJECT)) {
+                return options;
+            }
+
+            Boolean hasDept = fieldExists(APPLICATION_OBJECT, 'Department__c');
+            List<String> fields = new List<String>{ 'Id', 'Position__r.Name', 'Recruiter__r.Name' };
+            if (hasDept) {
+                fields.add('Department__c');
+            }
+
+            List<SObject> allApps = Database.query(
+                'SELECT ' + String.join(fields, ', ') + ' FROM Application__c LIMIT 1000'
+            );
+
+            Set<String> deptSeen = new Set<String>();
+            Set<String> recruiterSeen = new Set<String>();
+            Set<String> positionSeen = new Set<String>();
+
+            for (SObject app : allApps) {
+                if (hasDept) {
+                    String dept = (String) app.get('Department__c');
+                    if (String.isNotBlank(dept) && deptSeen.add(dept)) {
+                        options.departments.add(new FilterOption(dept, dept));
+                    }
+                }
+
+                String position = relatedName(app, 'Position__r');
+                if (String.isNotBlank(position) && positionSeen.add(position)) {
+                    options.positions.add(new FilterOption(position, position));
+                }
+
+                String recruiter = relatedName(app, 'Recruiter__r');
+                if (String.isNotBlank(recruiter) && recruiterSeen.add(recruiter)) {
+                    options.recruiters.add(new FilterOption(recruiter, recruiter));
+                }
+            }
+        } catch (Exception e) {
+            System.debug('Error in getFilterOptions: ' + e.getMessage() + '\n' + e.getStackTraceString());
+        }
+
+        return options;
+    }
+
+    @AuraEnabled
+    public static void bulkUpdateApplications(List<Id> applicationIds, String action) {
+        if (applicationIds == null || applicationIds.isEmpty() || String.isBlank(action)) {
+            throw new AuraHandledException('Applications and action are required.');
+        }
+
+        List<SObject> appsToUpdate = new List<SObject>();
+        String targetStatus = action.equals('reject') ? 'Rejected' : 'Interview 1';
+
+        for (SObject app : Database.query(
+            'SELECT Id, Status__c FROM Application__c WHERE Id IN (\'' + String.join(new List<Id>(applicationIds), '\',\'') + '\')'
+        )) {
+            String currentStatus = (String) app.get('Status__c');
+            if (StatusTransitionValidator.validate(currentStatus, targetStatus)) {
+                app.put('Status__c', targetStatus);
+                if (fieldExists(APPLICATION_OBJECT, 'Last_Stage_Change_Date__c')) {
+                    app.put('Last_Stage_Change_Date__c', Date.today());
+                }
+                appsToUpdate.add(app);
+            }
+        }
+
+        if (!appsToUpdate.isEmpty()) {
+            update appsToUpdate;
+            publishPipelineEvent(null, 'Bulk update');
+        }
+    }
+
+    public class FilterOptions {
+        @AuraEnabled public List<FilterOption> departments = new List<FilterOption>();
+        @AuraEnabled public List<FilterOption> recruiters = new List<FilterOption>();
+        @AuraEnabled public List<FilterOption> positions = new List<FilterOption>();
+    }
+
+    public class FilterOption {
+        @AuraEnabled public String label;
+        @AuraEnabled public String value;
+
+        public FilterOption(String value, String label) {
+            this.value = value;
+            this.label = label;
+        }
     }
 
     public class ChatterItem {
