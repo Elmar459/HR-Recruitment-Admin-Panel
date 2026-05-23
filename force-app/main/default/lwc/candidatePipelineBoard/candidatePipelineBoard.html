@@ -110,11 +110,13 @@
             </div>
         </template>
 
-        <div class="board slds-p-around_medium">
+        <div class="slds-scrollable_x slds-p-around_medium">
+        <div class="board slds-grid slds-grid_align-spread" style="min-width: max-content; gap: 0.75rem;">
             <template for:each={visibleStages} for:item="stage">
                 <section
                     key={stage.name}
-                    class="stage"
+                    class="stage slds-shrink-none"
+                    style="width: 18rem; min-height: 24rem;"
                     data-status={stage.name}
                     ondragover={handleDragOver}
                     ondrop={handleDrop}>
@@ -157,6 +159,7 @@
                     </div>
                 </section>
             </template>
+        </div>
         </div>
 
         <template if:true={showBulkModal}>
