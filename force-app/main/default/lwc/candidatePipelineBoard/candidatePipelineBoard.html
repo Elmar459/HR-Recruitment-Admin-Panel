@@ -1,107 +1,134 @@
 <template>
     <lightning-card title="Candidate Pipeline Board" icon-name="standard:kanban">
-        <div class="toolbar slds-p-horizontal_medium slds-p-top_small">
-            <lightning-input
-                type="search"
-                label="Filter"
-                variant="label-hidden"
-                placeholder="Filter candidates or positions"
-                value={searchTerm}
-                onchange={handleSearch}>
-            </lightning-input>
-            <div class="toolbar-actions">
-                <lightning-button-icon
-                    icon-name="utility:filterList"
-                    alternative-text="Toggle filters"
-                    title="Toggle filters"
-                    onclick={handleToggleFilters}>
-                </lightning-button-icon>
-                <lightning-button-icon
-                    icon-name="utility:refresh"
-                    alternative-text="Refresh board"
-                    title="Refresh board"
-                    onclick={handleRefresh}
-                    disabled={isBusy}>
-                </lightning-button-icon>
+        <!-- Панель инструментов -->
+        <div class="slds-p-horizontal_medium slds-p-vertical_small">
+            <div class="slds-grid slds-grid_align-spread slds-gutters">
+                <div class="slds-col slds-size_1-of-2">
+                    <lightning-input
+                        type="search"
+                        label="Filter candidates or positions"
+                        variant="label-hidden"
+                        placeholder="Filter candidates or positions"
+                        value={searchTerm}
+                        onchange={handleSearch}>
+                    </lightning-input>
+                </div>
+                <div class="slds-col slds-no-flex">
+                    <div class="slds-button-group" role="group">
+                        <lightning-button-icon
+                            icon-name="utility:filterList"
+                            alternative-text="Toggle filters"
+                            title="Toggle filters"
+                            onclick={handleToggleFilters}>
+                        </lightning-button-icon>
+                        <lightning-button-icon
+                            icon-name="utility:refresh"
+                            alternative-text="Refresh board"
+                            title="Refresh board"
+                            onclick={handleRefresh}
+                            disabled={isBusy}>
+                        </lightning-button-icon>
+                    </div>
+                </div>
             </div>
         </div>
 
+        <!-- Фильтры (без изменений) -->
         <template if:true={showFilters}>
-            <div class="filters slds-p-horizontal_medium slds-p-vertical_small">
-                <div class="filter-row">
-                    <lightning-combobox
-                        label="Department"
-                        value={departmentFilter}
-                        options={departmentOptions}
-                        onchange={handleDepartmentFilterChange}>
-                    </lightning-combobox>
-                    <lightning-combobox
-                        label="Recruiter"
-                        value={recruiterFilter}
-                        options={recruiterOptions}
-                        onchange={handleRecruiterFilterChange}>
-                    </lightning-combobox>
-                    <lightning-combobox
-                        label="Position"
-                        value={positionFilter}
-                        options={positionOptions}
-                        onchange={handlePositionFilterChange}>
-                    </lightning-combobox>
-                    <lightning-input
-                        type="date"
-                        label="From Date"
-                        value={dateFromFilter}
-                        onchange={handleDateFromFilterChange}>
-                    </lightning-input>
-                    <lightning-input
-                        type="date"
-                        label="To Date"
-                        value={dateToFilter}
-                        onchange={handleDateToFilterChange}>
-                    </lightning-input>
-                    <lightning-combobox
-                        label="SLA Status"
-                        value={slaStatusFilter}
-                        options={slaStatusOptions}
-                        onchange={handleSlaStatusFilterChange}>
-                    </lightning-combobox>
+            <div class="slds-p-horizontal_medium slds-p-vertical_small slds-border_top slds-border_bottom">
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3 slds-large-size_1-of-6 slds-p-bottom_x-small">
+                        <lightning-combobox
+                            label="Department"
+                            value={departmentFilter}
+                            options={departmentOptions}
+                            onchange={handleDepartmentFilterChange}>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3 slds-large-size_1-of-6 slds-p-bottom_x-small">
+                        <lightning-combobox
+                            label="Recruiter"
+                            value={recruiterFilter}
+                            options={recruiterOptions}
+                            onchange={handleRecruiterFilterChange}>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3 slds-large-size_1-of-6 slds-p-bottom_x-small">
+                        <lightning-combobox
+                            label="Position"
+                            value={positionFilter}
+                            options={positionOptions}
+                            onchange={handlePositionFilterChange}>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3 slds-large-size_1-of-6 slds-p-bottom_x-small">
+                        <lightning-input
+                            type="date"
+                            label="From Date"
+                            value={dateFromFilter}
+                            onchange={handleDateFromFilterChange}>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3 slds-large-size_1-of-6 slds-p-bottom_x-small">
+                        <lightning-input
+                            type="date"
+                            label="To Date"
+                            value={dateToFilter}
+                            onchange={handleDateToFilterChange}>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3 slds-large-size_1-of-6 slds-p-bottom_x-small">
+                        <lightning-combobox
+                            label="SLA Status"
+                            value={slaStatusFilter}
+                            options={slaStatusOptions}
+                            onchange={handleSlaStatusFilterChange}>
+                        </lightning-combobox>
+                    </div>
                 </div>
-
-                <div class="filter-toggles">
-                    <lightning-input
-                        type="checkbox"
-                        label="Top Matches (≥70%)"
-                        checked={showTopMatches}
-                        onchange={handleTopMatchesToggle}>
-                    </lightning-input>
-                    <lightning-input
-                        type="checkbox"
-                        label="Sort by Score"
-                        checked={sortByScore}
-                        onchange={handleSortByScoreToggle}>
-                    </lightning-input>
+                <div class="slds-grid slds-gutters slds-p-top_x-small">
+                    <div class="slds-col">
+                        <lightning-input
+                            type="checkbox"
+                            label="Top Matches (≥70%)"
+                            checked={showTopMatches}
+                            onchange={handleTopMatchesToggle}>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col">
+                        <lightning-input
+                            type="checkbox"
+                            label="Sort by Score"
+                            checked={sortByScore}
+                            onchange={handleSortByScoreToggle}>
+                        </lightning-input>
+                    </div>
                 </div>
             </div>
         </template>
 
-        <div class="bulk-actions slds-p-horizontal_medium slds-p-vertical_small">
-            <lightning-button
-                label="Mass Reject"
-                icon-name="utility:close"
-                variant="destructive-text"
-                onclick={handleMassReject}
-                disabled={isBusy}>
-            </lightning-button>
-            <lightning-button
-                label="Mass Advance"
-                icon-name="utility:forward"
-                variant="success"
-                onclick={handleMassAdvance}
-                disabled={isBusy}>
-            </lightning-button>
-            <span class="selection-count">({selectedApplicationIds.size} selected)</span>
+        <!-- Массовые действия -->
+        <div class="slds-p-horizontal_medium slds-p-vertical_small slds-border_bottom slds-grid slds-grid_align-spread">
+            <div class="slds-button-group" role="group">
+                <lightning-button
+                    label="Mass Reject"
+                    icon-name="utility:close"
+                    variant="destructive-text"
+                    onclick={handleMassReject}
+                    disabled={isBusy}>
+                </lightning-button>
+                <lightning-button
+                    label="Mass Advance"
+                    icon-name="utility:forward"
+                    variant="success"
+                    onclick={handleMassAdvance}
+                    disabled={isBusy}>
+                </lightning-button>
+            </div>
+            <span class="slds-text-body_small slds-text-color_weak">({selectedApplicationIds.size} selected)</span>
         </div>
 
+        <!-- Ошибки -->
         <template if:true={errorMessage}>
             <div class="slds-p-around_medium">
                 <div class="slds-notify slds-notify_alert slds-alert_error" role="alert">
@@ -110,78 +137,109 @@
             </div>
         </template>
 
-        <div class="scroll-container" style="overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 0.75rem;">
-        <div class="board" style="display: inline-flex; flex-wrap: nowrap; gap: 0.75rem; align-items: flex-start;">
-            <template for:each={visibleStages} for:item="stage">
-                <section
-                    key={stage.name}
-                    class="stage"
-                    style="flex: 0 0 18rem; min-height: 24rem;"
-                    data-status={stage.name}
-                    ondragover={handleDragOver}
-                    ondrop={handleDrop}>
-                    <header class="stage__header">
-                        <h3>{stage.name}</h3>
-                        <span>{stage.count}</span>
-                    </header>
+        <!-- Спиннер загрузки -->
+        <template if:true={isBusy}>
+            <div class="slds-is-relative slds-p-vertical_large">
+                <lightning-spinner alternative-text="Loading pipeline data..." size="medium"></lightning-spinner>
+            </div>
+        </template>
 
-                    <div class="stage__body">
-                        <template for:each={stage.applications} for:item="app">
-                            <article
-                                key={app.id}
-                                class={app.cardClass}
-                                draggable="true"
-                                data-id={app.id}
-                                ondragstart={handleDragStart}
-                                onclick={handleCardSelect}>
-                                <div class="card__topline">
-                                    <strong>{app.candidateName}</strong>
-                                    <span class={app.scoreClass}>{app.matchLabel}</span>
-                                    <template if:true={app.slaBreached}>
-                                        <lightning-icon
-                                            icon-name="utility:clock"
-                                            size="small"
-                                            class="sla-icon">
-                                        </lightning-icon>
+        <!-- Доска -->
+        <div class="slds-scrollable_x slds-p-horizontal_small">
+            <div class="slds-grid slds-grid_vertical-align-start slds-nowrap slds-gutters">
+                <template for:each={visibleStages} for:item="stage">
+                    <section
+                        key={stage.name}
+                        class="slds-col stage-column"
+                        data-status={stage.name}
+                        ondragover={handleDragOver}
+                        ondrop={handleDrop}>
+                        <div class="slds-card slds-card_boundary">
+                            <div class="slds-card__header slds-grid slds-grid_align-spread">
+                                <h3 class="slds-text-heading_small">{stage.name}</h3>
+                                <span class="slds-badge">{stage.count}</span>
+                            </div>
+                            <div class="slds-card__body slds-p-horizontal_small slds-p-vertical_xx-small">
+                                <div class="slds-grid slds-grid_vertical slds-gutters_small">
+                                    <template for:each={stage.applications} for:item="app">
+                                        <article
+                                            key={app.id}
+                                            class={app.cardClass}
+                                            draggable="true"
+                                            data-id={app.id}
+                                            data-candidate-id={app.candidateId}
+                                            data-position-id={app.positionId}
+                                            ondragstart={handleDragStart}
+                                            ondragend={handleDragEnd}
+                                            ondrop={handleDropOnCard}
+                                            onclick={handleCardClick}>
+                                            <div class="slds-grid slds-grid_align-spread slds-m-bottom_xx-small">
+                                                <strong 
+                                                    class="slds-truncate clickable-name" 
+                                                    title={app.candidateName}
+                                                    data-candidate-id={app.candidateId}
+                                                    onclick={handleCandidateNameClick}>
+                                                    {app.candidateName}
+                                                </strong>
+                                                <span class={app.scoreClass}>{app.matchLabel}</span>
+                                            </div>
+                                            <div class="slds-grid slds-grid_align-spread slds-m-bottom_xx-small">
+                                                <span 
+                                                    class="slds-text-body_small clickable-position" 
+                                                    data-position-id={app.positionId}
+                                                    onclick={handlePositionNameClick}>
+                                                    {app.positionName}
+                                                </span>
+                                                <template if:true={app.slaBreached}>
+                                                    <lightning-icon
+                                                        icon-name="utility:clock"
+                                                        size="x-small"
+                                                        alternative-text="SLA breached">
+                                                    </lightning-icon>
+                                                </template>
+                                            </div>
+                                            <div class="slds-grid slds-grid_align-spread">
+                                                <span class="slds-text-body_small">{app.priorityLabel}</span>
+                                                <span class="slds-text-body_small slds-text-color_weak">{app.daysLabel}</span>
+                                            </div>
+                                        </article>
+                                    </template>
+                                    <template if:true={stage.isEmpty}>
+                                        <div class="slds-align_absolute-center slds-text-color_weak slds-p-vertical_medium">
+                                            No applications
+                                        </div>
                                     </template>
                                 </div>
-                                <p>{app.positionName}</p>
-                                <div class="card__meta">
-                                    <span>{app.priorityLabel}</span>
-                                    <span>{app.daysLabel}</span>
-                                </div>
-                            </article>
-                        </template>
-
-                        <template if:true={stage.isEmpty}>
-                            <div class="empty">No applications</div>
-                        </template>
-                    </div>
-                </section>
-            </template>
-        </div>
+                            </div>
+                        </div>
+                    </section>
+                </template>
+            </div>
         </div>
 
+        <!-- Модальное окно подтверждения массового действия -->
         <template if:true={showBulkModal}>
-            <div class="modal-backdrop">
-                <div class="modal">
-                    <div class="modal-header">
-                        <h2>Confirm Bulk Action</h2>
-                    </div>
-                    <div class="modal-body">
-                        <p>Are you sure you want to {bulkAction} {selectedApplicationIds.size} applications?</p>
-                    </div>
-                    <div class="modal-footer">
-                        <lightning-button
-                            label="Cancel"
-                            onclick={handleBulkCancel}>
-                        </lightning-button>
-                        <lightning-button
-                            label="Confirm"
-                            variant="brand"
-                            onclick={handleBulkConfirm}
-                            disabled={isBusy}>
-                        </lightning-button>
+            <div class="slds-backdrop slds-backdrop_open" style="position: fixed; z-index: 9000;">
+                <div class="slds-modal slds-fade-in-open slds-modal_medium">
+                    <div class="slds-modal__container">
+                        <div class="slds-modal__header">
+                            <h2 class="slds-text-heading_medium">Confirm Bulk Action</h2>
+                        </div>
+                        <div class="slds-modal__content slds-p-around_medium">
+                            <p>Are you sure you want to <strong>{bulkAction}</strong> <strong>{selectedApplicationIds.size}</strong> applications?</p>
+                        </div>
+                        <div class="slds-modal__footer">
+                            <lightning-button
+                                label="Cancel"
+                                onclick={handleBulkCancel}>
+                            </lightning-button>
+                            <lightning-button
+                                label="Confirm"
+                                variant="brand"
+                                onclick={handleBulkConfirm}
+                                disabled={isBusy}>
+                            </lightning-button>
+                        </div>
                     </div>
                 </div>
             </div>

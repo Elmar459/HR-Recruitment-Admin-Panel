@@ -69,7 +69,7 @@ public with sharing class CandidateMatchingService {
         result.applicationId = app.Id;
         result.candidateId = app.Candidate__c;
         result.positionId = app.Position__c;
-        result.addScore('Skills', SkillsScoringService.calculate(skillMap, pSkills), 0.35);
+        result.addScore('Skills', SkillsScoringService.calculate(skillMap, pSkills), 0.35); 
         result.addScore('Experience', ExperienceScoringService.calculate(cSkills, pSkills), 0.25);
         result.addScore('Education', EducationScoringService.calculate(
             app.Candidate__r.Education_Level__c, app.Position__r.Education_Level__c), 0.15);

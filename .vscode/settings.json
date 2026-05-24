@@ -1,8 +1,7 @@
 {
-  "search.exclude": {
-    "**/node_modules": true,
-    "**/bower_components": true,
-    "**/.sf": true,
-    "**/.sfdx": true
+  "css.validate": true,
+  "html.validate.styles": false,
+  "[html]": {
+    "css.validate": false
   }
 }

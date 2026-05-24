@@ -1,191 +1,229 @@
 <template>
     <lightning-card title="Interview Timeline" icon-name="standard:event">
-        <template if:true={errorMessage}>
-            <div class="slds-p-around_medium">
-                <div class="slds-notify slds-notify_alert slds-alert_error" role="alert">
-                    <span>{errorMessage}</span>
-                </div>
+        <template if:true={isLoading}>
+            <div class="slds-p-around_medium slds-align_absolute-center" style="min-height:200px">
+                <lightning-spinner alternative-text="Loading timeline..." size="medium"></lightning-spinner>
             </div>
         </template>
 
-        <template if:true={hasApplication}>
-            <div class="it-shell">
-                <section class="it-summary">
-                    <div class="it-summary-box">
-                        <span class="it-label">Candidate</span>
-                        <button class="it-link" type="button" onclick={handleOpenCandidate}>
-                            {application.candidateName}
-                        </button>
+        <template if:false={isLoading}>
+            <template if:true={errorMessage}>
+                <div class="slds-p-around_medium">
+                    <div class="slds-notify slds-notify_alert slds-alert_error" role="alert">
+                        <span>{errorMessage}</span>
                     </div>
-                    <div class="it-summary-box">
-                        <span class="it-label">Position</span>
-                        <button class="it-link" type="button" onclick={handleOpenPosition}>
-                            {application.positionName}
-                        </button>
-                    </div>
-                    <div class="it-summary-box">
-                        <span class="it-label">Match</span>
-                        <strong>{matchLabel}</strong>
-                        <div class="it-progress">
-                            <div class="it-progress-fill" style={matchProgressStyle}></div>
-                        </div>
-                    </div>
-                    <div class="it-summary-box">
-                        <lightning-combobox
-                            label="Status"
-                            value={application.status}
-                            options={statusOptions}
-                            onchange={handleStatusChange}
-                            disabled={isBusy}>
-                        </lightning-combobox>
-                    </div>
-                </section>
+                </div>
+            </template>
 
-                <section class="it-stages" aria-label="Interview stages">
-                    <template for:each={stages} for:item="stage">
-                        <article key={stage.key} class={stage.stepClass}>
-                            <button
-                                class="it-stage-button"
-                                type="button"
-                                data-key={stage.key}
-                                data-expandable={stage.canExpand}
-                                onclick={handleStageClick}>
-                                <span class="it-stage-badge">{stage.numberValue}</span>
-                                <lightning-icon
-                                    icon-name={stage.iconName}
-                                    size="x-small"
-                                    variant={stage.variant}
-                                    alternative-text={stage.status}>
-                                </lightning-icon>
-                                <strong>{stage.type}</strong>
-                                <span>{stage.dateLabel}</span>
-                                <small>{stage.status}</small>
+            <template if:true={hasApplication}>
+                <div class="it-shell">
+                    <!-- Summary -->
+                    <section class="it-summary">
+                        <div class="it-summary-box">
+                            <span class="it-label">Candidate</span>
+                            <button class="it-link" type="button" onclick={handleOpenCandidate}>
+                                {application.candidateName}
                             </button>
-
-                            <template if:true={stage.canSchedule}>
-                                <lightning-button
-                                    label="Schedule Interview"
-                                    icon-name="utility:event"
-                                    variant="brand"
-                                    onclick={handleScheduleNext}
-                                    disabled={isBusy}>
-                                </lightning-button>
-                            </template>
-
-                            <template if:true={stage.canOpenInterview}>
-                                <lightning-button
-                                    label="Open Interview"
-                                    icon-name="utility:new_window"
-                                    onclick={handleOpenStageInterview}
-                                    data-id={stage.interview.id}>
-                                </lightning-button>
-                            </template>
-                        </article>
-                    </template>
-                </section>
-
-                <template for:each={stages} for:item="stage">
-                    <template if:true={stage.isExpanded}>
-                        <section key={stage.key} class="it-feedback">
-                            <div class="it-panel-header">
-                                <div>
-                                    <span class="it-label">Completed Stage</span>
-                                    <h3>{stage.type}</h3>
-                                </div>
-                                <lightning-badge label={stage.recommendation}></lightning-badge>
-                            </div>
-                            <div class="it-feedback-grid">
-                                <div>
-                                    <span class="it-label">Interviewer</span>
-                                    <strong>{stage.interviewerName}</strong>
-                                </div>
-                                <div>
-                                    <span class="it-label">Composite</span>
-                                    <strong>{stage.compositeScore}</strong>
-                                </div>
-                                <div>
-                                    <span class="it-label">Technical</span>
-                                    <strong>{stage.technicalScore}</strong>
-                                </div>
-                                <div>
-                                    <span class="it-label">Communication</span>
-                                    <strong>{stage.communicationScore}</strong>
-                                </div>
-                                <div>
-                                    <span class="it-label">Culture Fit</span>
-                                    <strong>{stage.cultureFitScore}</strong>
-                                </div>
-                            </div>
-                            <div class="it-notes-grid">
-                                <div>
-                                    <span class="it-label">Strengths</span>
-                                    <p>{stage.strengths}</p>
-                                </div>
-                                <div>
-                                    <span class="it-label">Weaknesses</span>
-                                    <p>{stage.weaknesses}</p>
-                                </div>
-                                <div>
-                                    <span class="it-label">Comments</span>
-                                    <p>{stage.comments}</p>
-                                </div>
-                            </div>
-                        </section>
-                    </template>
-                </template>
-
-                <section class="it-analytics">
-                    <div class="it-panel">
-                        <div class="it-panel-header">
-                            <h3>Candidate Score Trend</h3>
                         </div>
-                        <template if:true={hasTrend}>
-                            <svg class="it-trend" viewBox="0 0 200 110" role="img" aria-label="Candidate score trend">
-                                <line x1="8" y1="100" x2="192" y2="100"></line>
-                                <line x1="8" y1="0" x2="8" y2="100"></line>
-                                <polyline points={trendPoints}></polyline>
-                            </svg>
-                            <div class="it-trend-labels">
-                                <template for:each={trendLabels} for:item="point">
-                                    <span key={point.key}>{point.label}: {point.score}</span>
+                        <div class="it-summary-box">
+                            <span class="it-label">Position</span>
+                            <button class="it-link" type="button" onclick={handleOpenPosition}>
+                                {application.positionName}
+                            </button>
+                        </div>
+                        <div class="it-summary-box">
+                            <span class="it-label">Match</span>
+                            <strong>{matchLabel}</strong>
+                            <div class="it-progress">
+                                <div class="it-progress-fill" style={matchProgressStyle}></div>
+                            </div>
+                        </div>
+                        <div class="it-summary-box">
+                            <lightning-combobox
+                                label="Status"
+                                value={application.status}
+                                options={statusOptions}
+                                onchange={handleStatusChange}
+                                disabled={isBusy}>
+                            </lightning-combobox>
+                        </div>
+                    </section>
+
+                    <!-- Stages -->
+                    <section class="it-stages" aria-label="Interview stages">
+                        <template for:each={stages} for:item="stage">
+                            <article key={stage.key} class={stage.stepClass} data-stage-key={stage.key}>
+                                <div class="it-stage-header" onclick={handleStageClick} data-key={stage.key} data-expandable={stage.canExpand}>
+                                    <span class="it-stage-badge">{stage.numberValue}</span>
+                                    <lightning-icon
+                                        icon-name={stage.iconName}
+                                        size="x-small"
+                                        variant={stage.variant}
+                                        alternative-text={stage.status}>
+                                    </lightning-icon>
+                                    <strong class="it-stage-type">{stage.type}</strong>
+                                    <span class="it-stage-date">{stage.dateLabel}</span>
+                                    <small class="it-stage-status">{stage.status}</small>
+                                </div>
+                                <div class="it-stage-actions">
+                                    <template if:true={stage.canSchedule}>
+                                        <lightning-button
+                                            label="Schedule Interview"
+                                            icon-name="utility:event"
+                                            variant="brand"
+                                            onclick={handleScheduleNext}
+                                            data-stage-key={stage.key}
+                                            disabled={isBusy}>
+                                        </lightning-button>
+                                    </template>
+                                    <template if:true={stage.canOpenInterview}>
+                                        <a href={stage.interviewUrl} target="_blank" class="it-hyperlink">
+                                            <lightning-icon icon-name="utility:record" size="x-small"></lightning-icon>
+                                            Interview Record
+                                        </a>
+                                    </template>
+                                </div>
+                            </article>
+                        </template>
+                    </section>
+
+                    <!-- Expanded feedback -->
+                    <template for:each={stages} for:item="stage">
+                        <template if:true={stage.isExpanded}>
+                            <section key={stage.key} class="it-feedback it-feedback_expanded">
+                                <div class="it-panel-header">
+                                    <div>
+                                        <span class="it-label">Completed Stage</span>
+                                        <h3>{stage.type}</h3>
+                                    </div>
+                                    <lightning-badge label={stage.recommendation}></lightning-badge>
+                                </div>
+                                <div class="it-feedback-grid">
+                                    <div>
+                                        <span class="it-label">Interviewer</span>
+                                        <strong>{stage.interviewerName}</strong>
+                                    </div>
+                                    <div>
+                                        <span class="it-label">Composite</span>
+                                        <strong>{stage.compositeScore}</strong>
+                                    </div>
+                                    <div>
+                                        <span class="it-label">Technical</span>
+                                        <strong>{stage.technicalScore}</strong>
+                                    </div>
+                                    <div>
+                                        <span class="it-label">Communication</span>
+                                        <strong>{stage.communicationScore}</strong>
+                                    </div>
+                                    <div>
+                                        <span class="it-label">Culture Fit</span>
+                                        <strong>{stage.cultureFitScore}</strong>
+                                    </div>
+                                </div>
+                                <div class="it-notes-grid">
+                                    <div>
+                                        <span class="it-label">Strengths</span>
+                                        <p>{stage.strengths}</p>
+                                    </div>
+                                    <div>
+                                        <span class="it-label">Weaknesses</span>
+                                        <p>{stage.weaknesses}</p>
+                                    </div>
+                                    <div>
+                                        <span class="it-label">Comments</span>
+                                        <p>{stage.comments}</p>
+                                    </div>
+                                </div>
+                            </section>
+                        </template>
+                    </template>
+
+                    <!-- Analytics -->
+                    <section class="it-analytics">
+                        <div class="it-panel">
+                            <div class="it-panel-header">
+                                <h3>Candidate Score Trend</h3>
+                            </div>
+                            <template if:true={hasTrend}>
+                                <svg class="it-trend" viewBox="0 0 200 110" role="img">
+                                    <line x1="8" y1="100" x2="192" y2="100"></line>
+                                    <line x1="8" y1="0" x2="8" y2="100"></line>
+                                    <polyline points={trendPoints}></polyline>
+                                </svg>
+                                <div class="it-trend-labels">
+                                    <template for:each={trendLabels} for:item="point">
+                                        <span key={point.key}>{point.label}: {point.score}</span>
+                                    </template>
+                                </div>
+                            </template>
+                            <template if:false={hasTrend}>
+                                <div class="it-empty">No completed score trend yet</div>
+                            </template>
+                        </div>
+
+                        <div class="it-panel">
+                            <div class="it-panel-header">
+                                <h3>Match Score</h3>
+                                <strong>{matchLabel}</strong>
+                            </div>
+                            <div class="it-score-bars">
+                                <template for:each={matchDetails} for:item="item">
+                                    <div key={item.label} class="it-score-row">
+                                        <span>{item.label}</span>
+                                        <div class="it-progress">
+                                            <div class="it-progress-fill" style={item.style}></div>
+                                        </div>
+                                        <strong>{item.valueLabel}</strong>
+                                        <small>{item.weightedLabel}</small>
+                                    </div>
                                 </template>
                             </div>
-                        </template>
-                        <template if:false={hasTrend}>
-                            <div class="it-empty">No completed score trend yet</div>
-                        </template>
-                    </div>
+                        </div>
 
-                    <div class="it-panel">
-                        <div class="it-panel-header">
-                            <h3>Match Score</h3>
-                            <strong>{matchLabel}</strong>
+                        <div class={slaClass}>
+                            <div class="it-panel-header">
+                                <h3>SLA</h3>
+                                <strong>{slaLabel}</strong>
+                            </div>
+                            <div class="it-progress">
+                                <div class="it-progress-fill" style={slaProgressStyle}></div>
+                            </div>
                         </div>
-                        <div class="it-score-bars">
-                            <template for:each={matchDetails} for:item="item">
-                                <div key={item.label} class="it-score-row">
-                                    <span>{item.label}</span>
-                                    <div class="it-progress">
-                                        <div class="it-progress-fill" style={item.style}></div>
-                                    </div>
-                                    <strong>{item.valueLabel}</strong>
-                                    <small>{item.weightedLabel}</small>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-
-                    <div class={slaClass}>
-                        <div class="it-panel-header">
-                            <h3>SLA</h3>
-                            <strong>{slaLabel}</strong>
-                        </div>
-                        <div class="it-progress">
-                            <div class="it-progress-fill" style={slaProgressStyle}></div>
-                        </div>
-                    </div>
-                </section>
-            </div>
+                    </section>
+                </div>
+            </template>
         </template>
     </lightning-card>
+
+    <!-- Schedule Modal -->
+    <template if:true={showScheduleModal}>
+        <div class="slds-modal slds-fade-in-open slds-modal_large" role="dialog">
+            <div class="slds-modal__container">
+                <div class="slds-modal__header">
+                    <h2 class="slds-text-heading_medium">Schedule Interview</h2>
+                    <button class="slds-button slds-button_icon slds-modal__close" onclick={handleCloseModal}>
+                        <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
+                        <span class="slds-assistive-text">Close</span>
+                    </button>
+                </div>
+                <div class="slds-modal__content slds-p-around_medium">
+                    <lightning-input
+                        type="datetime-local"
+                        label="Select Date and Time"
+                        value={selectedDateTime}
+                        onchange={handleDateTimeChange}
+                        required>
+                    </lightning-input>
+                    <p class="slds-m-top_small slds-text-color_success">
+                        Suggested nearest slot: {suggestedSlotFormatted}
+                    </p>
+                </div>
+                <div class="slds-modal__footer">
+                    <lightning-button label="Cancel" variant="neutral" onclick={handleCloseModal}></lightning-button>
+                    <lightning-button label="Confirm Schedule" variant="brand" onclick={handleConfirmSchedule} loading-state={isScheduling}></lightning-button>
+                </div>
+            </div>
+        </div>
+        <div class="slds-backdrop slds-backdrop_open"></div>
+    </template>
 </template>

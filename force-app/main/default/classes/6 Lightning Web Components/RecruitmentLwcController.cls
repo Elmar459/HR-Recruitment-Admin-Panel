@@ -245,9 +245,212 @@ public with sharing class RecruitmentLwcController {
         EventBus.publish(eventRecord);
     }
 
+    @AuraEnabled
+    public static FilterOptions getFilterOptions() {
+        FilterOptions options = new FilterOptions();
+
+        try {
+            if (!objectExists(APPLICATION_OBJECT)) {
+                return options;
+            }
+
+            Boolean hasDept = fieldExists(APPLICATION_OBJECT, 'Department__c');
+            List<String> fields = new List<String>{ 'Id', 'Position__r.Name', 'Recruiter__r.Name' };
+            if (hasDept) {
+                fields.add('Department__c');
+            }
+
+            List<SObject> allApps = Database.query(
+                'SELECT ' + String.join(fields, ', ') + ' FROM Application__c LIMIT 1000'
+            );
+
+            Set<String> deptSeen = new Set<String>();
+            Set<String> recruiterSeen = new Set<String>();
+            Set<String> positionSeen = new Set<String>();
+
+            for (SObject app : allApps) {
+                if (hasDept) {
+                    String dept = (String) app.get('Department__c');
+                    if (String.isNotBlank(dept) && deptSeen.add(dept)) {
+                        options.departments.add(new FilterOption(dept, dept));
+                    }
+                }
+
+                String position = relatedName(app, 'Position__r');
+                if (String.isNotBlank(position) && positionSeen.add(position)) {
+                    options.positions.add(new FilterOption(position, position));
+                }
+
+                String recruiter = relatedName(app, 'Recruiter__r');
+                if (String.isNotBlank(recruiter) && recruiterSeen.add(recruiter)) {
+                    options.recruiters.add(new FilterOption(recruiter, recruiter));
+                }
+            }
+        } catch (Exception e) {
+            System.debug('Error in getFilterOptions: ' + e.getMessage() + '\n' + e.getStackTraceString());
+        }
+
+        return options;
+    }
+
+    @AuraEnabled
+    public static void bulkUpdateApplications(List<Id> applicationIds, String action) {
+        if (applicationIds == null || applicationIds.isEmpty() || String.isBlank(action)) {
+            throw new AuraHandledException('Applications and action are required.');
+        }
+
+        List<Application__c> appsToUpdate = new List<Application__c>();
+        String targetStatus = action.equals('reject') ? 'Rejected' : 'Interview 1';
+
+        List<Application__c> existingApps = [
+            SELECT Id, Status__c
+            FROM Application__c
+            WHERE Id IN :applicationIds
+        ];
+
+        for (Application__c app : existingApps) {
+            app.Status__c = targetStatus;
+            if (fieldExists(APPLICATION_OBJECT, 'Last_Stage_Change_Date__c')) {
+                app.Last_Stage_Change_Date__c = Date.today();
+            }
+            appsToUpdate.add(app);
+        }
+
+        if (appsToUpdate.isEmpty()) {
+            throw new AuraHandledException('No applications can be updated due to invalid status transitions.');
+        }
+
+        try {
+            update appsToUpdate;
+            if (objectExists(PIPELINE_EVENT)) {
+                SObject eventRecord = Schema.getGlobalDescribe().get(PIPELINE_EVENT).newSObject();
+                putIfPresent(eventRecord, 'Application_Id__c', null);
+                putIfPresent(eventRecord, 'Status__c', 'Bulk ' + action);
+                EventBus.publish(eventRecord);
+            }
+        } catch (Exception e) {
+            throw new AuraHandledException('Database error: ' + e.getMessage());
+        }
+    }
+
+    // ================= НОВЫЕ МЕТОДЫ ДЛЯ КАСТОМНОГО РАСПИСАНИЯ =================
+
+    @AuraEnabled
+    public static DateTime getNearestAvailableSlot(Id applicationId) {
+        if (applicationId == null) {
+            throw new AuraHandledException('Application ID is required.');
+        }
+
+        String stageType = getActiveInterviewStage(applicationId);
+        if (String.isBlank(stageType)) {
+            throw new AuraHandledException('No active interview stage found for this application.');
+        }
+
+        Id interviewerId = getDefaultInterviewerId(applicationId);
+        if (interviewerId == null) {
+            interviewerId = UserInfo.getUserId();
+        }
+
+        Datetime searchStart = System.now().addHours(2);
+        Datetime searchEnd = searchStart.addDays(30);
+        Set<Datetime> occupied = new Set<Datetime>();
+        for (Interview__c interview : [
+            SELECT Date_Time__c
+            FROM Interview__c
+            WHERE Interviewer__c = :interviewerId
+              AND Date_Time__c >= :searchStart
+              AND Date_Time__c <= :searchEnd
+              AND Status__c NOT IN ('Cancelled', 'No Show')
+        ]) {
+            if (interview.Date_Time__c != null) occupied.add(interview.Date_Time__c);
+        }
+
+        for (Integer dayOffset = 0; dayOffset < 30; dayOffset++) {
+            Date currentDate = searchStart.date().addDays(dayOffset);
+            if (isWeekend(currentDate)) continue;
+
+            for (Integer hour = 9; hour <= 17; hour++) {
+                Datetime slot = Datetime.newInstance(currentDate, Time.newInstance(hour, 0, 0, 0));
+                if (slot < searchStart) continue;
+                if (occupied.contains(slot)) continue;
+                return slot;
+            }
+        }
+        throw new AuraHandledException('No available interview slots found in the next 30 days.');
+    }
+
+    @AuraEnabled
+    public static void scheduleInterviewAtSlot(Id applicationId, DateTime selectedTime) {
+        if (applicationId == null || selectedTime == null) {
+            throw new AuraHandledException('Application ID and selected time are required.');
+        }
+
+        String stageType = getActiveInterviewStage(applicationId);
+        if (String.isBlank(stageType)) {
+            throw new AuraHandledException('No active interview stage found for this application.');
+        }
+
+        Id interviewerId = getDefaultInterviewerId(applicationId);
+        if (interviewerId == null) interviewerId = UserInfo.getUserId();
+
+        Interview__c newInterview = new Interview__c();
+        newInterview.Application__c = applicationId;
+        newInterview.Type__c = stageType;
+        newInterview.Status__c = 'Scheduled';
+        newInterview.Date_Time__c = selectedTime;
+        newInterview.Interviewer__c = interviewerId;
+        insert newInterview;
+    }
+
+    private static String getActiveInterviewStage(Id applicationId) {
+        List<Interview__c> interviews = [
+            SELECT Type__c, Status__c
+            FROM Interview__c
+            WHERE Application__c = :applicationId
+            ORDER BY CreatedDate ASC
+        ];
+        Set<String> completedTypes = new Set<String>();
+        for (Interview__c iv : interviews) {
+            if (iv.Status__c == 'Completed') {
+                completedTypes.add(iv.Type__c);
+            }
+        }
+        List<String> allStages = new List<String>{ 'Phone Screen', 'Technical', 'HR/Behavioral', 'Cultural Fit', 'Final/Executive' };
+        for (String stage : allStages) {
+            if (!completedTypes.contains(stage)) {
+                return stage;
+            }
+        }
+        return null;
+    }
+
+    private static Id getDefaultInterviewerId(Id applicationId) {
+        try {
+            Application__c app = [
+                SELECT Recruiter__c
+                FROM Application__c
+                WHERE Id = :applicationId
+                LIMIT 1
+            ];
+            return app.Recruiter__c;
+        } catch (Exception e) {
+            return UserInfo.getUserId();
+        }
+    }
+
+    private static Boolean isWeekend(Date dt) {
+        DateTime dtTime = DateTime.newInstance(dt, Time.newInstance(0, 0, 0, 0));
+        String dayOfWeek = dtTime.format('E');
+        return dayOfWeek == 'Sat' || dayOfWeek == 'Sun';
+    }
+
+    // ================= ОСТАЛЬНЫЕ ПРИВАТНЫЕ МЕТОДЫ (БЕЗ ИЗМЕНЕНИЙ) =================
+
     private static PipelineCard toPipelineCard(SObject app) {
         PipelineCard card = new PipelineCard();
         card.id = (Id) app.get('Id');
+        card.candidateId = (Id) getIfPresent(app, 'Candidate__c');
+        card.positionId = (Id) getIfPresent(app, 'Position__c');
         card.status = asString(getIfPresent(app, 'Status__c'));
         card.candidateName = relatedName(app, 'Candidate__r');
         card.positionName = relatedName(app, 'Position__r');
@@ -416,7 +619,7 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static String buildApplicationQuery() {
-        List<String> fields = new List<String>{ 'Id', 'Status__c' };
+        List<String> fields = new List<String>{ 'Id', 'Status__c', 'Candidate__c', 'Position__c' };
         addField(fields, APPLICATION_OBJECT, 'Applied_Date__c');
         addField(fields, APPLICATION_OBJECT, 'Match_Score__c');
         addField(fields, APPLICATION_OBJECT, 'Days_in_Stage__c');
@@ -682,17 +885,18 @@ public with sharing class RecruitmentLwcController {
         return value == null ? false : Boolean.valueOf(value);
     }
 
+    // ================= ВНУТРЕННИЕ КЛАССЫ =================
+
     public class PipelineStage {
         @AuraEnabled public String name;
         @AuraEnabled public List<PipelineCard> applications = new List<PipelineCard>();
-
-        public PipelineStage(String name) {
-            this.name = name;
-        }
+        public PipelineStage(String name) { this.name = name; }
     }
 
     public class PipelineCard {
         @AuraEnabled public Id id;
+        @AuraEnabled public Id candidateId;
+        @AuraEnabled public Id positionId;
         @AuraEnabled public String candidateName;
         @AuraEnabled public String positionName;
         @AuraEnabled public String status;
@@ -790,82 +994,6 @@ public with sharing class RecruitmentLwcController {
         @AuraEnabled public String createdByName;
     }
 
-    @AuraEnabled
-    public static FilterOptions getFilterOptions() {
-        FilterOptions options = new FilterOptions();
-
-        try {
-            if (!objectExists(APPLICATION_OBJECT)) {
-                return options;
-            }
-
-            Boolean hasDept = fieldExists(APPLICATION_OBJECT, 'Department__c');
-            List<String> fields = new List<String>{ 'Id', 'Position__r.Name', 'Recruiter__r.Name' };
-            if (hasDept) {
-                fields.add('Department__c');
-            }
-
-            List<SObject> allApps = Database.query(
-                'SELECT ' + String.join(fields, ', ') + ' FROM Application__c LIMIT 1000'
-            );
-
-            Set<String> deptSeen = new Set<String>();
-            Set<String> recruiterSeen = new Set<String>();
-            Set<String> positionSeen = new Set<String>();
-
-            for (SObject app : allApps) {
-                if (hasDept) {
-                    String dept = (String) app.get('Department__c');
-                    if (String.isNotBlank(dept) && deptSeen.add(dept)) {
-                        options.departments.add(new FilterOption(dept, dept));
-                    }
-                }
-
-                String position = relatedName(app, 'Position__r');
-                if (String.isNotBlank(position) && positionSeen.add(position)) {
-                    options.positions.add(new FilterOption(position, position));
-                }
-
-                String recruiter = relatedName(app, 'Recruiter__r');
-                if (String.isNotBlank(recruiter) && recruiterSeen.add(recruiter)) {
-                    options.recruiters.add(new FilterOption(recruiter, recruiter));
-                }
-            }
-        } catch (Exception e) {
-            System.debug('Error in getFilterOptions: ' + e.getMessage() + '\n' + e.getStackTraceString());
-        }
-
-        return options;
-    }
-
-    @AuraEnabled
-    public static void bulkUpdateApplications(List<Id> applicationIds, String action) {
-        if (applicationIds == null || applicationIds.isEmpty() || String.isBlank(action)) {
-            throw new AuraHandledException('Applications and action are required.');
-        }
-
-        List<SObject> appsToUpdate = new List<SObject>();
-        String targetStatus = action.equals('reject') ? 'Rejected' : 'Interview 1';
-
-        for (SObject app : Database.query(
-            'SELECT Id, Status__c FROM Application__c WHERE Id IN (\'' + String.join(new List<Id>(applicationIds), '\',\'') + '\')'
-        )) {
-            String currentStatus = (String) app.get('Status__c');
-            if (StatusTransitionValidator.validate(currentStatus, targetStatus)) {
-                app.put('Status__c', targetStatus);
-                if (fieldExists(APPLICATION_OBJECT, 'Last_Stage_Change_Date__c')) {
-                    app.put('Last_Stage_Change_Date__c', Date.today());
-                }
-                appsToUpdate.add(app);
-            }
-        }
-
-        if (!appsToUpdate.isEmpty()) {
-            update appsToUpdate;
-            publishPipelineEvent(null, 'Bulk update');
-        }
-    }
-
     public class FilterOptions {
         @AuraEnabled public List<FilterOption> departments = new List<FilterOption>();
         @AuraEnabled public List<FilterOption> recruiters = new List<FilterOption>();
@@ -875,11 +1003,7 @@ public with sharing class RecruitmentLwcController {
     public class FilterOption {
         @AuraEnabled public String label;
         @AuraEnabled public String value;
-
-        public FilterOption(String value, String label) {
-            this.value = value;
-            this.label = label;
-        }
+        public FilterOption(String value, String label) { this.value = value; this.label = label; }
     }
 
     public class ChatterItem {
