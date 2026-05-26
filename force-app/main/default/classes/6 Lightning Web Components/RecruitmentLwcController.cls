@@ -79,7 +79,6 @@ public with sharing class RecruitmentLwcController {
 
         SObject app = Database.query(buildApplicationDetailQuery(applicationId));
         payload.application = toApplicationSummary(app);
-        payload.statusOptions = getStatusOptions(payload.application.status);
 
         if (objectExists(INTERVIEW_OBJECT)) {
             for (SObject interview : Database.query(buildInterviewQuery(applicationId))) {
@@ -87,10 +86,75 @@ public with sharing class RecruitmentLwcController {
             }
         }
 
-        payload.stages = buildStageItems(payload.interviews, payload.application.status);
+        payload.stages = buildStageItemsWithRules(payload.interviews);
         payload.scoreTrend = buildScoreTrend(payload.stages);
         payload.matchDetails = buildMatchDetails(applicationId, app);
+        
         return payload;
+    }
+
+    private static List<StageItem> buildStageItemsWithRules(List<InterviewItem> interviews) {
+        List<String> stageTypes = new List<String>{'Phone Screen', 'Technical', 'HR/Behavioral', 'Cultural Fit', 'Final/Executive'};
+        List<StageItem> stages = new List<StageItem>();
+        Map<String, InterviewItem> interviewMap = new Map<String, InterviewItem>();
+        for (InterviewItem iv : interviews) {
+            interviewMap.put(iv.type, iv);
+        }
+
+        Boolean phoneCompleted = isStageCompleted(interviewMap, 'Phone Screen');
+        Boolean techCompleted = isStageCompleted(interviewMap, 'Technical');
+        Boolean hrCompleted = isStageCompleted(interviewMap, 'HR/Behavioral');
+        Boolean cultureCompleted = isStageCompleted(interviewMap, 'Cultural Fit');
+        Boolean finalCompleted = isStageCompleted(interviewMap, 'Final/Executive');
+
+        for (Integer i = 0; i < stageTypes.size(); i++) {
+            String type = stageTypes[i];
+            InterviewItem iv = interviewMap.get(type);
+            StageItem stage = new StageItem();
+            stage.numberValue = i + 1;
+            stage.type = type;
+            stage.interview = iv;
+
+            if (i == 0) { // Phone Screen
+                stage.state = phoneCompleted ? 'completed' : (iv != null ? 'active' : 'available');
+            } 
+            else if (i >= 1 && i <= 3) { // 2,3,4
+                if (!phoneCompleted) {
+                    stage.state = 'pending';
+                } else if (iv != null && iv.status == 'Completed') {
+                    stage.state = 'completed';
+                } else {
+                    stage.state = 'available';
+                }
+            } 
+            else if (i == 4) { // Final
+                if ((techCompleted && hrCompleted && cultureCompleted) || (iv != null && iv.status != 'Cancelled')) {
+                    stage.state = (iv != null && iv.status == 'Completed') ? 'completed' : 'available';
+                } else {
+                    stage.state = 'pending';
+                }
+            }
+
+            if (iv != null) {
+                stage.status = iv.status;
+                stage.dateTimeValue = iv.dateTimeValue;
+                stage.score = iv.score;
+                if (iv.status == 'Completed') {
+                    stage.state = 'completed';
+                } else if (iv.status == 'Cancelled' || iv.status == 'No Show') {
+                    stage.state = 'rejected';
+                }
+            } else {
+                stage.status = (stage.state == 'pending' ? 'Pending' : (stage.state == 'available' ? 'Available' : 'Active'));
+            }
+            stages.add(stage);
+        }
+        return stages;
+    }
+
+    private static Boolean isStageCompleted(Map<String, InterviewItem> interviewMap, String type) {
+        InterviewItem iv = interviewMap.get(type);
+        return iv != null && iv.status == 'Completed';
     }
 
     @AuraEnabled
@@ -114,6 +178,52 @@ public with sharing class RecruitmentLwcController {
         Datetime startTime = nextAvailableSlot(UserInfo.getUserId());
         return InterviewService.scheduleInterview(applicationId, UserInfo.getUserId(), startTime, nextType);
     }
+
+    @AuraEnabled
+    public static void finalizeApplication(Id applicationId, String decision, String rejectionReason) {
+        System.debug('=== finalizeApplication called ===');
+        System.debug('appId: ' + applicationId + ', decision: ' + decision + ', reason: ' + rejectionReason);
+        
+        if (applicationId == null || String.isBlank(decision)) {
+            throw new AuraHandledException('Application ID and decision are required.');
+        }
+        
+        Application__c app = [SELECT Id, Status__c FROM Application__c WHERE Id = :applicationId LIMIT 1];
+        
+        String newStatus;
+        if (decision == 'Hire') {
+            newStatus = 'Hired';
+        } else if (decision == 'Reject') {
+            newStatus = 'Rejected';
+        } else if (decision == 'Withdrawn') {
+            newStatus = 'Withdrawn';
+        } else {
+            throw new AuraHandledException('Invalid decision. Must be Hire, Reject, or Withdrawn.');
+        }
+        
+        app.Status__c = newStatus;
+        
+        if (decision == 'Reject' && String.isNotBlank(rejectionReason)) {
+            if (fieldExists(APPLICATION_OBJECT, 'Rejection_Reason__c')) {
+                app.Rejection_Reason__c = rejectionReason;
+            } else if (fieldExists(APPLICATION_OBJECT, 'Reason_for_Rejection__c')) {
+                app.Reason_for_Rejection__c = rejectionReason;
+            }
+        }
+        
+        
+        Database.SaveResult result = Database.update(app, false);
+        if (!result.isSuccess()) {
+            String errorMsg = '';
+            for (Database.Error err : result.getErrors()) {
+                errorMsg += err.getMessage() + ' ';
+            }
+            throw new AuraHandledException('Update failed: ' + errorMsg);
+        }
+        
+        publishPipelineEvent(applicationId, newStatus);
+        System.debug('Status updated to: ' + newStatus);
+}
 
     @AuraEnabled(cacheable=true)
     public static List<MessageItem> getMessages(Id applicationId) {
@@ -333,8 +443,7 @@ public with sharing class RecruitmentLwcController {
         }
     }
 
-    // ================= НОВЫЕ МЕТОДЫ ДЛЯ КАСТОМНОГО РАСПИСАНИЯ =================
-
+    // МЕТОДЫ ДЛЯ РАСПИСАНИЯ ИНТЕРВЬЮ
     @AuraEnabled
     public static DateTime getNearestAvailableSlot(Id applicationId) {
         if (applicationId == null) {
@@ -379,28 +488,21 @@ public with sharing class RecruitmentLwcController {
         throw new AuraHandledException('No available interview slots found in the next 30 days.');
     }
 
-    @AuraEnabled
-    public static void scheduleInterviewAtSlot(Id applicationId, DateTime selectedTime) {
-        if (applicationId == null || selectedTime == null) {
-            throw new AuraHandledException('Application ID and selected time are required.');
-        }
-
-        String stageType = getActiveInterviewStage(applicationId);
-        if (String.isBlank(stageType)) {
-            throw new AuraHandledException('No active interview stage found for this application.');
-        }
-
+        @AuraEnabled
+        public static void scheduleInterviewAtSlot(Id applicationId, DateTime selectedTime, String interviewType) {
+            if (applicationId == null || selectedTime == null || String.isBlank(interviewType)) {
+        throw new AuraHandledException('Application ID, time, and interview type are required.');
+    }
         Id interviewerId = getDefaultInterviewerId(applicationId);
         if (interviewerId == null) interviewerId = UserInfo.getUserId();
-
-        Interview__c newInterview = new Interview__c();
-        newInterview.Application__c = applicationId;
-        newInterview.Type__c = stageType;
-        newInterview.Status__c = 'Scheduled';
-        newInterview.Date_Time__c = selectedTime;
-        newInterview.Interviewer__c = interviewerId;
-        insert newInterview;
-    }
+            Interview__c newInterview = new Interview__c();
+            newInterview.Application__c = applicationId;
+            newInterview.Type__c = interviewType;
+            newInterview.Status__c = 'Scheduled';
+            newInterview.Date_Time__c = selectedTime;
+            newInterview.Interviewer__c = interviewerId;
+            insert newInterview;
+}
 
     private static String getActiveInterviewStage(Id applicationId) {
         List<Interview__c> interviews = [
@@ -444,8 +546,7 @@ public with sharing class RecruitmentLwcController {
         return dayOfWeek == 'Sat' || dayOfWeek == 'Sun';
     }
 
-    // ================= ОСТАЛЬНЫЕ ПРИВАТНЫЕ МЕТОДЫ (БЕЗ ИЗМЕНЕНИЙ) =================
-
+    // ================= ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ =================
     private static PipelineCard toPipelineCard(SObject app) {
         PipelineCard card = new PipelineCard();
         card.id = (Id) app.get('Id');
@@ -508,64 +609,12 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static void addDetail(List<MatchDetail> details, String label, Decimal value, Decimal weightedValue) {
-        if (value == null) {
-            return;
-        }
+        if (value == null) return;
         MatchDetail detail = new MatchDetail();
         detail.label = label;
         detail.value = value;
         detail.weightedValue = weightedValue;
         details.add(detail);
-    }
-
-    private static List<StageItem> buildStageItems(List<InterviewItem> interviews, String applicationStatus) {
-        List<String> stageTypes = new List<String>{ 'Phone Screen', 'Technical', 'HR/Behavioral', 'Cultural Fit', 'Final/Executive' };
-        List<StageItem> stages = new List<StageItem>();
-        Integer activeIndex = activeStageIndex(applicationStatus, interviews);
-
-        for (Integer i = 0; i < stageTypes.size(); i++) {
-            StageItem stage = new StageItem();
-            stage.numberValue = i + 1;
-            stage.type = stageTypes[i];
-            stage.state = i < activeIndex ? 'completed' : i == activeIndex ? 'active' : 'pending';
-            for (InterviewItem interview : interviews) {
-                if (interview.type != null && interview.type.contains(stage.type)) {
-                    stage.interview = interview;
-                    stage.status = interview.status;
-                    stage.dateTimeValue = interview.dateTimeValue;
-                    stage.score = interview.score;
-                    if (interview.status == 'Completed') {
-                        stage.state = 'completed';
-                    } else if (interview.status == 'Cancelled' || interview.status == 'No Show') {
-                        stage.state = 'rejected';
-                    }
-                    break;
-                }
-            }
-            if (stage.status == null) {
-                stage.status = stage.state == 'pending' ? 'Pending' : 'Active';
-            }
-            stages.add(stage);
-        }
-        return stages;
-    }
-
-    private static Integer activeStageIndex(String applicationStatus, List<InterviewItem> interviews) {
-        if (applicationStatus != null && applicationStatus.startsWith('Interview ')) {
-            String stageNumber = applicationStatus.replace('Interview ', '');
-            try {
-                return Math.max(0, Math.min(4, Integer.valueOf(stageNumber) - 1));
-            } catch (Exception e) {
-                return 0;
-            }
-        }
-        Integer completed = 0;
-        for (InterviewItem interview : interviews) {
-            if (interview.status == 'Completed') {
-                completed++;
-            }
-        }
-        return Math.max(0, Math.min(4, completed));
     }
 
     private static List<ScoreTrendPoint> buildScoreTrend(List<StageItem> stages) {
@@ -584,13 +633,9 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static FeedbackItem getFeedbackItem(Id interviewId) {
-        if (interviewId == null || !objectExists(FEEDBACK_OBJECT)) {
-            return null;
-        }
+        if (interviewId == null || !objectExists(FEEDBACK_OBJECT)) return null;
         List<SObject> feedbackRecords = Database.query(buildFeedbackQuery(interviewId));
-        if (feedbackRecords.isEmpty()) {
-            return null;
-        }
+        if (feedbackRecords.isEmpty()) return null;
         SObject feedback = feedbackRecords[0];
         FeedbackItem item = new FeedbackItem();
         item.id = (Id) feedback.get('Id');
@@ -752,9 +797,7 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static void publishMessageEvent(MessageItem item) {
-        if (!objectExists(MESSAGE_EVENT)) {
-            return;
-        }
+        if (!objectExists(MESSAGE_EVENT)) return;
         SObject eventRecord = Schema.getGlobalDescribe().get(MESSAGE_EVENT).newSObject();
         putIfPresent(eventRecord, 'Application_Id__c', String.valueOf(item.applicationId));
         putIfPresent(eventRecord, 'Message_Body__c', item.body);
@@ -766,9 +809,7 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static void publishPipelineEvent(Id applicationId, String status) {
-        if (!objectExists(PIPELINE_EVENT)) {
-            return;
-        }
+        if (!objectExists(PIPELINE_EVENT)) return;
         SObject eventRecord = Schema.getGlobalDescribe().get(PIPELINE_EVENT).newSObject();
         putIfPresent(eventRecord, 'Application_Id__c', String.valueOf(applicationId));
         putIfPresent(eventRecord, 'Status__c', status);
@@ -776,9 +817,7 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static void addField(List<String> fields, String objectName, String fieldName) {
-        if (fieldExists(objectName, fieldName)) {
-            fields.add(fieldName);
-        }
+        if (fieldExists(objectName, fieldName)) fields.add(fieldName);
     }
 
     private static void addRelationshipField(List<String> fields, String relationshipName, String fieldName) {
@@ -786,9 +825,7 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static Object getIfPresent(SObject record, String fieldName) {
-        if (record == null || !record.getSObjectType().getDescribe().fields.getMap().containsKey(fieldName)) {
-            return null;
-        }
+        if (record == null || !record.getSObjectType().getDescribe().fields.getMap().containsKey(fieldName)) return null;
         try {
             return record.get(fieldName);
         } catch (SObjectException e) {
@@ -799,9 +836,7 @@ public with sharing class RecruitmentLwcController {
     private static Object getFirstPresent(SObject record, List<String> fieldNames) {
         for (String fieldName : fieldNames) {
             Object value = getIfPresent(record, fieldName);
-            if (value != null) {
-                return value;
-            }
+            if (value != null) return value;
         }
         return null;
     }
@@ -840,8 +875,7 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static Boolean fieldExists(String objectName, String fieldName) {
-        return objectExists(objectName)
-            && Schema.getGlobalDescribe().get(objectName).getDescribe().fields.getMap().containsKey(fieldName);
+        return objectExists(objectName) && Schema.getGlobalDescribe().get(objectName).getDescribe().fields.getMap().containsKey(fieldName);
     }
 
     private static void putIfPresent(SObject record, String fieldName, Object value) {
@@ -852,18 +886,12 @@ public with sharing class RecruitmentLwcController {
 
     private static String relatedName(SObject record, String relationshipName) {
         SObject related = record.getSObject(relationshipName);
-        if (related == null) {
-            return null;
-        }
+        if (related == null) return null;
         String firstName = asString(getIfPresent(related, 'First_Name__c'));
         String lastName = asString(getIfPresent(related, 'Last_Name__c'));
         List<String> parts = new List<String>();
-        if (!String.isBlank(firstName)) {
-            parts.add(firstName);
-        }
-        if (!String.isBlank(lastName)) {
-            parts.add(lastName);
-        }
+        if (!String.isBlank(firstName)) parts.add(firstName);
+        if (!String.isBlank(lastName)) parts.add(lastName);
         String fullName = String.join(parts, ' ').trim();
         return String.isBlank(fullName) ? asString(getIfPresent(related, 'Name')) : fullName;
     }
@@ -886,7 +914,6 @@ public with sharing class RecruitmentLwcController {
     }
 
     // ================= ВНУТРЕННИЕ КЛАССЫ =================
-
     public class PipelineStage {
         @AuraEnabled public String name;
         @AuraEnabled public List<PipelineCard> applications = new List<PipelineCard>();

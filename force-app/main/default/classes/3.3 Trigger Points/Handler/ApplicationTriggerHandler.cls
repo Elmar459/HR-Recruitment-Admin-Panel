@@ -7,20 +7,25 @@ public with sharing class ApplicationTriggerHandler {
                 app.Status__c = 'New';
             }
         }
+        // Проверяем SLA для новых записей (если есть правило для статуса New)
+        SLAMonitorService.markBreaches(apps, null);
     }
 
     public static void beforeUpdate(List<Application__c> apps, Map<Id, Application__c> oldMap) {
-        SLAMonitorService.markBreaches(apps, oldMap);
-        for (Application__c app : apps) {
-            Application__c oldApp = oldMap.get(app.Id);
-            if (app.Status__c != oldApp.Status__c) {
-                if (!StatusTransitionValidator.validate(oldApp.Status__c, app.Status__c)) {
-                    app.Status__c.addError('Invalid status transition.');
-                }
-                app.Last_Stage_Change_Date__c = Date.today();
+    // 1. Сначала обрабатываем смену статуса: валидация и обновление даты
+    for (Application__c app : apps) {
+        Application__c oldApp = oldMap.get(app.Id);
+        if (app.Status__c != oldApp.Status__c) {
+            if (!StatusTransitionValidator.validate(oldApp.Status__c, app.Status__c)) {
+                app.Status__c.addError('Invalid status transition.');
             }
+            app.Last_Stage_Change_Date__c = Date.today();
         }
     }
+    
+    // 2. Теперь, когда даты актуальны, проверяем SLA
+    SLAMonitorService.markBreaches(apps, oldMap);
+}
 
     public static void afterInsert(List<Application__c> apps) {
         Map<Id, MatchResult> scores = CandidateMatchingService.scoreApplications(

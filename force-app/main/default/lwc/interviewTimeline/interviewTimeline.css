@@ -24,6 +24,7 @@
     color: #5c5c5c;
     font-size: 0.7rem;
     text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 .it-link {
     background: transparent;
@@ -32,6 +33,9 @@
     cursor: pointer;
     font-weight: 700;
     padding: 0;
+}
+.it-link:hover {
+    text-decoration: underline;
 }
 .it-stages {
     display: grid;
@@ -43,6 +47,7 @@
     border-radius: 0.5rem;
     border-top: 0.25rem solid #747474;
     padding: 0.75rem;
+    transition: all 0.2s ease;
 }
 .it-stage-card_completed {
     border-top-color: #2e844a;
@@ -53,6 +58,19 @@
 .it-stage-card_active {
     background: #eef4ff;
     border-top-color: #0176d3;
+}
+.it-stage-card_available {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.it-stage-card_available:hover {
+    background: #e0ebf5;
+    transform: translateY(-2px);
+}
+.it-stage-card_selected {
+    border: 2px solid #0176d3;
+    box-shadow: 0 0 0 2px rgba(1,118,211,0.3);
+    transform: scale(1.01);
 }
 .it-stage-header {
     align-items: center;
@@ -100,6 +118,11 @@
     gap: 0.25rem;
     padding: 0.25rem 0.5rem;
     text-decoration: none;
+    transition: background 0.2s;
+}
+.it-hyperlink:hover {
+    background: #e0e0e0;
+    text-decoration: underline;
 }
 .it-panel-header {
     align-items: center;
@@ -141,6 +164,7 @@
 .it-progress-fill {
     background: #2e844a;
     height: 100%;
+    transition: width 0.4s ease;
 }
 .it-score-bars {
     display: grid;
@@ -183,6 +207,44 @@
     padding: 1rem;
     text-align: center;
 }
+/* Контейнер кнопок – чисто, без рамок и фона */
+.it-actions-clean {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+.it-decision-buttons {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+/* Бейдж финального статуса */
+.it-final-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-weight: bold;
+    text-align: center;
+    margin-top: 0.5rem;
+}
+.it-badge-hired {
+    background-color: #2e844a;
+    color: white;
+}
+.it-badge-rejected {
+    background-color: #ba0517;
+    color: white;
+}
+.it-badge-withdrawn {
+    background-color: #f2b84c;
+    color: #1a1a1a;
+}
 @media (max-width: 64rem) {
     .it-summary, .it-analytics, .it-feedback-grid, .it-notes-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -195,13 +257,4 @@
     .it-summary, .it-analytics, .it-feedback-grid, .it-notes-grid {
         grid-template-columns: 1fr;
     }
-}
-.slds-button_success {
-    background-color: #2e844a;
-    border-color: #2e844a;
-    color: white;
-}
-.slds-button_success:hover {
-    background-color: #1f5e34;
-    border-color: #1f5e34;
 }
