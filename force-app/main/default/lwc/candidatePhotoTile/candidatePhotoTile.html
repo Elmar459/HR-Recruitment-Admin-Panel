@@ -1,0 +1,55 @@
+<template>
+    <lightning-card>
+        <div class="slds-media slds-m-around_medium">
+            <div class="slds-media__figure">
+                <div class="photo-container">
+                    <template if:true={photoUrl}>
+                        <img src={photoUrl} class="candidate-photo" alt="Candidate" />
+                    </template>
+                    <template if:false={photoUrl}>
+                        <lightning-icon icon-name="standard:avatar" size="x-large" class="avatar-placeholder"></lightning-icon>
+                    </template>
+                    <lightning-button 
+                        label="Upload Photo" 
+                        variant="neutral" 
+                        size="x-small"
+                        onclick={handleUploadClick}
+                        disabled={isLoading}
+                        class="slds-m-top_x-small">
+                    </lightning-button>
+                </div>
+            </div>
+            <div class="slds-media__body">
+                <template if:true={candidateInfo}>
+                    <h2 class="slds-text-heading_medium slds-m-bottom_xx-small">
+                        {candidateInfo.firstName} {candidateInfo.lastName}
+                    </h2>
+                    <div class="slds-m-bottom_xx-small editable-field">
+                        <lightning-icon icon-name="utility:email" size="x-small" class="slds-m-right_xx-small"></lightning-icon>
+                        <template if:false={editingEmail}>
+                            <span class="editable-value" onclick={startEditEmail}>{candidateInfo.email}</span>
+                        </template>
+                        <template if:true={editingEmail}>
+                            <lightning-input type="email" value={editEmailValue} onchange={handleEmailChange} onblur={saveEmail} onkeyup={handleEmailKeyup} class="inline-input" variant="label-hidden"></lightning-input>
+                        </template>
+                    </div>
+                    <div class="editable-field">
+                        <lightning-icon icon-name="utility:call" size="x-small" class="slds-m-right_xx-small"></lightning-icon>
+                        <template if:false={editingPhone}>
+                            <span class="editable-value" onclick={startEditPhone}>{candidateInfo.phone}</span>
+                        </template>
+                        <template if:true={editingPhone}>
+                            <lightning-input type="tel" value={editPhoneValue} onchange={handlePhoneChange} onblur={savePhone} onkeyup={handlePhoneKeyup} class="inline-input" variant="label-hidden"></lightning-input>
+                        </template>
+                    </div>
+                </template>
+                <template if:false={candidateInfo}>
+                    <lightning-spinner alternative-text="Loading..." size="small"></lightning-spinner>
+                </template>
+            </div>
+        </div>
+        <div if:true={isLoading} class="slds-m-around_medium slds-text-align_center">
+            <lightning-spinner alternative-text="Uploading..."></lightning-spinner>
+        </div>
+    </lightning-card>
+</template>

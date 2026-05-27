@@ -39,34 +39,38 @@
                             </div>
                         </div>
                         <div class="it-actions-clean">
-    <div class="it-decision-buttons">
-        <lightning-button 
-            label="Schedule Interview" 
-            variant="brand" 
-            onclick={handleScheduleSelected} 
-            disabled={isScheduleDisabled}>
-        </lightning-button>
-        <lightning-button 
-            label="Hire" 
-            variant="Success" 
-            onclick={handleHireClick} 
-            disabled={isHireDisabled}>
-        </lightning-button>
-        <lightning-button 
-            label="Reject" 
-            variant="destructive" 
-            onclick={handleRejectClick}>
-        </lightning-button>
-        <lightning-button 
-            label="Withdrawn" 
-            variant="warning" 
-            onclick={handleWithdrawnClick}>
-        </lightning-button>
-    </div>
-    <template if:true={finalStatusLabel}>
-        <div class="it-final-badge {finalStatusClass}">{finalStatusLabel}</div>
-    </template>
-</div>
+                            <div class="it-decision-buttons">
+                                <lightning-button 
+                                    label="Schedule Interview" 
+                                    variant="brand" 
+                                    onclick={handleScheduleSelected} 
+                                    disabled={isScheduleDisabled}>
+                                </lightning-button>
+                                <lightning-button 
+                                    label="Hire" 
+                                    variant="neutral" 
+                                    onclick={handleHireClick} 
+                                    disabled={isHireDisabled}
+                                    class="slds-button_hire-custom">
+                                </lightning-button>
+                                <lightning-button 
+                                    label="Reject" 
+                                    variant="destructive" 
+                                    onclick={handleRejectClick}>
+                                </lightning-button>
+                                <lightning-button 
+                                    label="Withdrawn" 
+                                    variant="neutral" 
+                                    onclick={handleWithdrawnClick}
+                                    class="slds-button_withdrawn-custom">
+                                </lightning-button>
+                            </div>
+                            <template if:true={finalStatusLabel}>
+                                <div class="it-final-badge {finalStatusClass}">
+                                    {finalStatusLabel}
+                                </div>
+                            </template>
+                        </div>
                     </section>
 
                     <!-- Этапы интервью -->
@@ -155,7 +159,7 @@
         </template>
     </lightning-card>
 
-    <!-- Модальное окно для планирования интервью -->
+    <!-- Модальные окна (оставляем как есть) -->
     <template if:true={showScheduleModal}>
         <div class="slds-modal slds-fade-in-open slds-modal_large" role="dialog">
             <div class="slds-modal__container">
@@ -176,7 +180,6 @@
         <div class="slds-backdrop slds-backdrop_open"></div>
     </template>
 
-    <!-- Модальное окно подтверждения Hire -->
     <template if:true={showConfirmHireModal}>
         <div class="slds-modal slds-fade-in-open" role="dialog">
             <div class="slds-modal__container">
@@ -193,7 +196,6 @@
         <div class="slds-backdrop slds-backdrop_open"></div>
     </template>
 
-    <!-- Модальное окно подтверждения Reject -->
     <template if:true={showConfirmRejectModal}>
         <div class="slds-modal slds-fade-in-open" role="dialog">
             <div class="slds-modal__container">
@@ -211,7 +213,6 @@
         <div class="slds-backdrop slds-backdrop_open"></div>
     </template>
 
-    <!-- Модальное окно подтверждения Withdrawn -->
     <template if:true={showConfirmWithdrawnModal}>
         <div class="slds-modal slds-fade-in-open" role="dialog">
             <div class="slds-modal__container">

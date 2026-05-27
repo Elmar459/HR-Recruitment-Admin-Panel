@@ -207,7 +207,7 @@
     padding: 1rem;
     text-align: center;
 }
-/* Контейнер кнопок – чисто, без рамок и фона */
+/* Контейнер кнопок */
 .it-actions-clean {
     border: none !important;
     background: transparent !important;
@@ -223,6 +223,23 @@
     border: none;
     padding: 0;
     margin: 0;
+}
+/* Кастомные цвета для Hire и Withdrawn */
+.it-decision-buttons .slds-button_hire-custom {
+    background-color: #2e844a !important;
+    border-color: #2e844a !important;
+    color: white !important;
+}
+.it-decision-buttons .slds-button_hire-custom:hover {
+    background-color: #1f5e34 !important;
+}
+.it-decision-buttons .slds-button_withdrawn-custom {
+    background-color: #f2b84c !important;
+    border-color: #d9952e !important;
+    color: #1a1a1a !important;
+}
+.it-decision-buttons .slds-button_withdrawn-custom:hover {
+    background-color: #e0a030 !important;
 }
 /* Бейдж финального статуса */
 .it-final-badge {

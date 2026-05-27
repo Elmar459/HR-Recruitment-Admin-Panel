@@ -279,6 +279,7 @@ export default class InterviewTimeline extends NavigationMixin(LightningElement)
                 selectedTime: isoDateTime,
                 interviewType: this.selectedInterviewType
             });
+            await new Promise(resolve => setTimeout(resolve, 300));
             await refreshApex(this.wiredTimeline);
             this.showToast('Interview scheduled', `Scheduled at ${this.selectedDateTime.replace('T', ' ')}`, 'success');
             this.handleCloseModal();
@@ -327,44 +328,44 @@ export default class InterviewTimeline extends NavigationMixin(LightningElement)
     }
 
     async handleConfirmHire() {
-    try {
-        await finalizeApplication({ applicationId: this.recordId, decision: 'Hire', rejectionReason: '' });
-        await refreshApex(this.wiredTimeline);
-        this.showToast('Hired', 'Candidate has been hired.', 'success');
-        this.handleCloseConfirmModal();
-    } catch (error) {
-        console.error('Hire error details:', JSON.stringify(error));
-        this.showToast('Error', this.reduceError(error), 'error');
+        try {
+            await finalizeApplication({ applicationId: this.recordId, decision: 'Hire', rejectionReason: '' });
+            await refreshApex(this.wiredTimeline);
+            this.showToast('Hired', 'Candidate has been hired.', 'success');
+            this.handleCloseConfirmModal();
+        } catch (error) {
+            console.error('Hire error details:', error);
+            this.showToast('Error', this.reduceError(error), 'error');
+        }
     }
-}
 
-async handleConfirmReject() {
-    if (!this.rejectionReason) {
-        this.showToast('Reason required', 'Please provide a reason for rejection.', 'warning');
-        return;
+    async handleConfirmReject() {
+        if (!this.rejectionReason) {
+            this.showToast('Reason required', 'Please provide a reason for rejection.', 'warning');
+            return;
+        }
+        try {
+            await finalizeApplication({ applicationId: this.recordId, decision: 'Reject', rejectionReason: this.rejectionReason });
+            await refreshApex(this.wiredTimeline);
+            this.showToast('Rejected', 'Candidate has been rejected.', 'success');
+            this.handleCloseConfirmModal();
+        } catch (error) {
+            console.error('Reject error details:', error);
+            this.showToast('Error', this.reduceError(error), 'error');
+        }
     }
-    try {
-        await finalizeApplication({ applicationId: this.recordId, decision: 'Reject', rejectionReason: this.rejectionReason });
-        await refreshApex(this.wiredTimeline);
-        this.showToast('Rejected', 'Candidate has been rejected.', 'success');
-        this.handleCloseConfirmModal();
-    } catch (error) {
-        console.error('Reject error details:', JSON.stringify(error));
-        this.showToast('Error', this.reduceError(error), 'error');
-    }
-}
 
-async handleConfirmWithdrawn() {
-    try {
-        await finalizeApplication({ applicationId: this.recordId, decision: 'Withdrawn', rejectionReason: '' });
-        await refreshApex(this.wiredTimeline);
-        this.showToast('Withdrawn', 'Application marked as withdrawn.', 'success');
-        this.handleCloseConfirmModal();
-    } catch (error) {
-        console.error('Withdrawn error details:', JSON.stringify(error));
-        this.showToast('Error', this.reduceError(error), 'error');
+    async handleConfirmWithdrawn() {
+        try {
+            await finalizeApplication({ applicationId: this.recordId, decision: 'Withdrawn', rejectionReason: '' });
+            await refreshApex(this.wiredTimeline);
+            this.showToast('Withdrawn', 'Application marked as withdrawn.', 'success');
+            this.handleCloseConfirmModal();
+        } catch (error) {
+            console.error('Withdrawn error details:', error);
+            this.showToast('Error', this.reduceError(error), 'error');
+        }
     }
-}
 
     navigateToRecord(recordId) {
         if (!recordId) return;

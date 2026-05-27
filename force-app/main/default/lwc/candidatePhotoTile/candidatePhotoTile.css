@@ -1,0 +1,55 @@
+.candidate-photo {
+    width: 96px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 2px solid #dddbda;
+}
+
+/* Контейнер для иконки-заглушки — центрируем содержимое */
+.avatar-placeholder {
+    width: 96px;
+    height: 96px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Родительский контейнер фото-зоны */
+.photo-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 120px;
+}
+
+.slds-media__figure {
+    margin-right: 1rem;
+}
+
+.slds-media__body h2 {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.editable-field {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.25rem;
+}
+
+.editable-value {
+    cursor: pointer;
+    border-bottom: 1px dashed #0070d2;
+    color: #0070d2;
+    padding: 0.125rem 0;
+}
+
+.editable-value:hover {
+    background-color: #f3f3f3;
+}
+
+.inline-input {
+    flex: 1;
+    max-width: 300px;
+}

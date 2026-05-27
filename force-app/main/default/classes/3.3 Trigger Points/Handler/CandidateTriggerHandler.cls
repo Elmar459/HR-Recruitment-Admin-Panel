@@ -1,33 +1,36 @@
 public with sharing class CandidateTriggerHandler {
+    
+    // ========== ОСНОВНЫЕ ТОЧКИ ВХОДА ==========
     public static void beforeSave(List<Candidate__c> candidates, Map<Id, Candidate__c> oldMap) {
         normalizeNames(candidates);
         validateUniqueEmail(candidates, oldMap);
     }
 
     public static void afterInsert(List<Candidate__c> candidates) {
-        List<Task> tasks = new List<Task>();
-        for (Candidate__c candidate : candidates) {
-            tasks.add(new Task(
-                Subject = 'Welcome candidate',
-                WhatId = candidate.Id,
-                Status = 'Not Started',
-                Priority = 'Normal',
-                ActivityDate = Date.today().addDays(1)
-            ));
-        }
-        if (!tasks.isEmpty()) {
-            insert tasks;
-        }
+        // Существующая логика: создание Welcome Task
+        createWelcomeTasks(candidates);
+        
+        // НОВОЕ: загрузка фото из LinkedIn для новых кандидатов, у которых указан URL
+        enqueueLinkedInPhotoJobs(candidates);
     }
 
     public static void afterUpdate(List<Candidate__c> candidates, Map<Id, Candidate__c> oldMap) {
+        // Существующая логика: пересчёт match, если изменились навыки
         rescoreOpenApplications(new Map<Id, Candidate__c>(candidates).keySet());
+        
+        // НОВОЕ: загрузка фото только если поле LinkedIn_URL__c изменилось
+        List<Candidate__c> candidatesWithNewLinkedIn = new List<Candidate__c>();
+        for (Candidate__c cand : candidates) {
+            Candidate__c old = oldMap.get(cand.Id);
+            if (!String.isBlank(cand.LinkedIn_URL__c) && 
+                (old == null || cand.LinkedIn_URL__c != old.LinkedIn_URL__c)) {
+                candidatesWithNewLinkedIn.add(cand);
+            }
+        }
+        enqueueLinkedInPhotoJobs(candidatesWithNewLinkedIn);
     }
 
-    public static void handle(List<Candidate__c> candidates) {
-        rescoreOpenApplications(new Map<Id, Candidate__c>(candidates).keySet());
-    }
-
+    // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ (существующие) ==========
     private static void normalizeNames(List<Candidate__c> candidates) {
         for (Candidate__c candidate : candidates) {
             candidate.First_Name__c = HrTextUtil.toTitleCase(candidate.First_Name__c);
@@ -42,9 +45,8 @@ public with sharing class CandidateTriggerHandler {
                 emails.add(candidate.Email__c.toLowerCase());
             }
         }
-        if (emails.isEmpty()) {
-            return;
-        }
+        if (emails.isEmpty()) return;
+        
         for (Candidate__c existing : [
             SELECT Id, Email__c FROM Candidate__c WHERE Email__c IN :emails
         ]) {
@@ -67,13 +69,34 @@ public with sharing class CandidateTriggerHandler {
             SELECT Id
             FROM Application__c
             WHERE Candidate__c IN :candidateIds
-            AND Status__c != 'Rejected'
-            AND Status__c != 'Hired'
+            AND Status__c NOT IN ('Rejected', 'Hired')
         ];
         if (!applications.isEmpty()) {
             CandidateMatchingService.updateScores(
                 CandidateMatchingService.scoreApplications(new Map<Id, Application__c>(applications).keySet())
             );
         }
+    }
+
+    private static void createWelcomeTasks(List<Candidate__c> candidates) {
+        List<Task> tasks = new List<Task>();
+        for (Candidate__c candidate : candidates) {
+            tasks.add(new Task(
+                Subject = 'Welcome candidate',
+                WhatId = candidate.Id,
+                Status = 'Not Started',
+                Priority = 'Normal',
+                ActivityDate = Date.today().addDays(1)
+            ));
+        }
+        if (!tasks.isEmpty()) {
+            insert tasks;
+        }
+    }
+
+    // ========== НОВЫЙ МЕТОД: АСИНХРОННАЯ ЗАГРУЗКА ФОТО ==========
+    private static void enqueueLinkedInPhotoJobs(List<Candidate__c> candidates) {
+        if (candidates == null || candidates.isEmpty()) return;
+        System.enqueueJob(new LinkedInPhotoQueueable(candidates));
     }
 }
