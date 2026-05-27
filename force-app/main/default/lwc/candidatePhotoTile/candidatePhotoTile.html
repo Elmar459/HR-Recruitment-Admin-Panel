@@ -1,12 +1,13 @@
 <template>
     <lightning-card>
-        <div class="slds-media slds-m-around_medium">
-            <div class="slds-media__figure">
+        <div class="summary-grid">
+            <!-- Левая колонка: фото -->
+            <div class="summary-photo-col">
                 <div class="photo-container">
-                    <template if:true={photoUrl}>
-                        <img src={photoUrl} class="candidate-photo" alt="Candidate" />
+                    <template if:true={candidateInfo.photoUrl}>
+                        <img src={candidateInfo.photoUrl} class="candidate-photo" alt="Candidate" />
                     </template>
-                    <template if:false={photoUrl}>
+                    <template if:false={candidateInfo.photoUrl}>
                         <lightning-icon icon-name="standard:avatar" size="x-large" class="avatar-placeholder"></lightning-icon>
                     </template>
                     <lightning-button 
@@ -14,42 +15,172 @@
                         variant="neutral" 
                         size="x-small"
                         onclick={handleUploadClick}
-                        disabled={isLoading}
+                        disabled={isLoadingPhoto}
                         class="slds-m-top_x-small">
                     </lightning-button>
                 </div>
             </div>
-            <div class="slds-media__body">
-                <template if:true={candidateInfo}>
-                    <h2 class="slds-text-heading_medium slds-m-bottom_xx-small">
-                        {candidateInfo.firstName} {candidateInfo.lastName}
-                    </h2>
-                    <div class="slds-m-bottom_xx-small editable-field">
-                        <lightning-icon icon-name="utility:email" size="x-small" class="slds-m-right_xx-small"></lightning-icon>
-                        <template if:false={editingEmail}>
-                            <span class="editable-value" onclick={startEditEmail}>{candidateInfo.email}</span>
+
+            <!-- Правая колонка -->
+            <div class="summary-info-col">
+                <!-- Имя и контакты -->
+                <div class="summary-header">
+                    <h2 class="slds-text-heading_medium">{candidateInfo.firstName} {candidateInfo.lastName}</h2>
+                    <div class="contact-icons">
+                        <template if:true={candidateInfo.phone}>
+                            <a href="tel:{candidateInfo.phone}" class="contact-icon" title="Phone">
+                                <img src={phoneIconUrl} class="custom-icon" alt="Phone" />
+                            </a>
                         </template>
-                        <template if:true={editingEmail}>
-                            <lightning-input type="email" value={editEmailValue} onchange={handleEmailChange} onblur={saveEmail} onkeyup={handleEmailKeyup} class="inline-input" variant="label-hidden"></lightning-input>
-                        </template>
-                    </div>
-                    <div class="editable-field">
-                        <lightning-icon icon-name="utility:call" size="x-small" class="slds-m-right_xx-small"></lightning-icon>
-                        <template if:false={editingPhone}>
-                            <span class="editable-value" onclick={startEditPhone}>{candidateInfo.phone}</span>
-                        </template>
-                        <template if:true={editingPhone}>
-                            <lightning-input type="tel" value={editPhoneValue} onchange={handlePhoneChange} onblur={savePhone} onkeyup={handlePhoneKeyup} class="inline-input" variant="label-hidden"></lightning-input>
+                        <template if:true={candidateInfo.linkedInUrl}>
+                            <a href={candidateInfo.linkedInUrl} target="_blank" class="contact-icon" title="LinkedIn">
+                                <img src={linkedinIconUrl} class="custom-icon" alt="LinkedIn" />
+                            </a>
                         </template>
                     </div>
-                </template>
-                <template if:false={candidateInfo}>
-                    <lightning-spinner alternative-text="Loading..." size="small"></lightning-spinner>
-                </template>
+                </div>
+
+                <!-- Метрики выбранной заявки -->
+                <div class="summary-metrics">
+                    <div class="metric">
+                        <span class="metric-label">Stage:</span>
+                        <span class="metric-value">{selectedStage}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Applied:</span>
+                        <span class="metric-value">{selectedAppliedDate}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Days in stage:</span>
+                        <span class="metric-value">{selectedDaysInStage}</span>
+                    </div>
+                </div>
+
+                <!-- Прогресс этапов -->
+                <div class="stage-progress">
+                    <span class="metric-label">Progress:</span>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill" style={stageProgressStyle}></div>
+                    </div>
+                    <span class="metric-value">{stageProgressPercent}% ({selectedStageOrder}/{selectedTotalStages})</span>
+                </div>
+
+                <!-- Ближайшее интервью -->
+                <div if:true={nextInterview} class="next-interview">
+                    <lightning-icon icon-name="utility:event" size="x-small"></lightning-icon>
+                    <span>Next: {nextInterview.type} · {formattedNextInterviewDate}</span>
+                </div>
+
+                <!-- Позиции (кнопки-чипсы) -->
+                <div class="positions">
+                    <template for:each={recentApplications} for:item="app">
+                        <button key={app.id} 
+                                class="position-chip {selectedApplicationId == app.id ? 'position-chip-active' : ''}"
+                                onclick={selectApplication}
+                                data-id={app.id}>
+                            {app.positionName}
+                        </button>
+                    </template>
+                </div>
+
+                <!-- Applications (номера заявок ссылками) -->
+                <div class="applications-list">
+                    <div class="section-label">Applications</div>
+                    <div class="application-links">
+                        <template for:each={recentApplications} for:item="app">
+                            <a key={app.id} 
+                               href="javascript:void(0)" 
+                               class="application-link {selectedApplicationId == app.id ? 'selected-application-link' : ''}"
+                               onclick={navigateToApplication}
+                               data-id={app.id}>
+                                {app.applicationNumber}
+                            </a>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Top Skills -->
+                <div if:true={topSkills.length} class="top-skills">
+                    <div class="section-label">Top Skills</div>
+                    <div class="skills-list">
+                        <template for:each={topSkills} for:item="skill">
+                            <span key={skill.name} 
+                                  class="skill-chip" 
+                                  data-id={skill.candidateSkillId}
+                                  onclick={navigateToSkill}>
+                                {skill.name}
+                            </span>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Match Score и SLA -->
+                <div class="score-sla-row">
+                    <div class="match-score">
+                        <span class="metric-label">Match Score:</span>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill" style={progressBarStyle}></div>
+                        </div>
+                        <span class="score-percent">{selectedMatchScore}%</span>
+                    </div>
+                    <div class="sla-info">
+                        <template if:true={selectedSla}>
+                            <lightning-icon icon-name="utility:clock" size="x-small"></lightning-icon>
+                            <span class="sla-label">SLA:</span>
+                            <span class={slaTextClass}>{slaText}</span>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Быстрые действия -->
+                <div class="quick-actions">
+                    <lightning-button label="Schedule Interview" variant="brand" onclick={openInterviewFlow}></lightning-button>
+                    <lightning-button label="Send Message" variant="neutral" onclick={openMessagingModal}></lightning-button>
+                </div>
+
+                <!-- Предупреждения -->
+                <div if:true={warnings.length} class="warnings">
+                    <template for:each={warnings} for:item="warning">
+                        <div key={warning} class="warning-item">
+                            <lightning-icon icon-name="utility:warning" size="x-small" class="warning-icon"></lightning-icon>
+                            <span>{warning}</span>
+                        </div>
+                    </template>
+                </div>
             </div>
         </div>
-        <div if:true={isLoading} class="slds-m-around_medium slds-text-align_center">
-            <lightning-spinner alternative-text="Uploading..."></lightning-spinner>
-        </div>
+
+        <!-- Модальные окна -->
+        <template if:true={showMessagingModal}>
+            <div class="modal-backdrop" onclick={closeMessagingModal}>
+                <div class="modal-container" onclick={stopPropagation}>
+                    <div class="modal-header">
+                        <h3>Send Message</h3>
+                        <lightning-button-icon icon-name="utility:close" variant="bare" onclick={closeMessagingModal}></lightning-button-icon>
+                    </div>
+                    <div class="modal-content">
+                        <c-messaging-panel record-id={selectedApplicationId}></c-messaging-panel>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <template if:true={showInterviewFlow}>
+            <div class="modal-backdrop" onclick={closeInterviewFlow}>
+                <div class="modal-container modal-large" onclick={stopPropagation}>
+                    <div class="modal-header">
+                        <h3>Schedule Interview</h3>
+                        <lightning-button-icon icon-name="utility:close" variant="bare" onclick={closeInterviewFlow}></lightning-button-icon>
+                    </div>
+                    <div class="modal-content">
+                        <lightning-flow
+                            flow-api-name="Interview_Scheduling_Flow"
+                            flow-input-variables={flowInputs}
+                            onstatuschange={handleFlowStatusChange}>
+                        </lightning-flow>
+                    </div>
+                </div>
+            </div>
+        </template>
     </lightning-card>
 </template>
