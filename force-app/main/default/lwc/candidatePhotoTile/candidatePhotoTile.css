@@ -3,12 +3,15 @@
     gap: 1rem;
     padding: 1rem;
 }
+
 .summary-photo-col {
     flex-shrink: 0;
 }
+
 .summary-info-col {
     flex: 1;
 }
+
 .candidate-photo {
     width: 96px;
     height: 96px;
@@ -16,6 +19,7 @@
     border-radius: 50%;
     border: 2px solid #dddbda;
 }
+
 .avatar-placeholder {
     width: 96px;
     height: 96px;
@@ -23,22 +27,26 @@
     align-items: center;
     justify-content: center;
 }
+
 .photo-container {
     display: flex;
     flex-direction: column;
     align-items: center;
     width: 120px;
 }
+
 .summary-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
 }
+
 .contact-icons {
     display: flex;
     gap: 0.75rem;
 }
+
 .contact-icon {
     display: inline-flex;
     align-items: center;
@@ -49,35 +57,69 @@
     background-color: #f3f3f3;
     transition: all 0.2s;
 }
+
 .contact-icon:hover {
     background-color: #e0e0e0;
     transform: scale(1.05);
 }
+
 .custom-icon {
     width: 1rem;
     height: 1rem;
 }
+
 .summary-metrics {
     display: flex;
     gap: 2rem;
     margin-bottom: 0.75rem;
 }
+
 .metric {
     font-size: 0.875rem;
 }
+
 .metric-label {
     font-weight: 600;
     margin-right: 0.25rem;
 }
+
 .metric-value {
     color: #1f1f2b;
 }
+
+/* Прогресс этапов – центрирование */
 .stage-progress {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    justify-content: center;
+    gap: 0.75rem;
     margin-bottom: 0.75rem;
 }
+
+.stage-progress .metric-label {
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.stage-progress .progress-bar-container {
+    width: 250px;
+    height: 10px;
+    background-color: #e0e0e0;
+    border-radius: 1rem;
+    overflow: hidden;
+}
+
+.stage-progress .progress-bar-fill {
+    height: 100%;
+    background-color: #2e844a;
+    border-radius: 1rem;
+}
+
+.stage-progress .metric-value {
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
 .next-interview {
     display: inline-flex;
     align-items: center;
@@ -89,12 +131,14 @@
     border-radius: 0.25rem;
     max-width: fit-content;
 }
+
 .positions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 1rem;
 }
+
 .position-chip {
     background-color: #f3f3f3;
     border: none;
@@ -105,31 +149,39 @@
     cursor: pointer;
     transition: all 0.2s;
 }
+
 .position-chip:hover {
     background-color: #e0e0e0;
     transform: scale(1.02);
 }
+
 .position-chip-active {
     background-color: #0070d2;
     color: white;
 }
+
 .position-chip-active:hover {
     background-color: #005fb2;
 }
+
 .applications-list {
     margin: 0.5rem 0;
 }
+
 .section-label {
     font-weight: 600;
     font-size: 0.75rem;
     margin-bottom: 0.25rem;
     color: #4b4b5c;
 }
+
 .application-links {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+    align-items: center;
 }
+
 .application-link {
     font-size: 0.75rem;
     color: #0070d2;
@@ -138,27 +190,40 @@
     padding: 0.2rem 0.6rem;
     border-radius: 1rem;
     transition: all 0.2s;
+    cursor: pointer;
 }
+
 .application-link:hover {
     background-color: #e0e0e0;
     text-decoration: underline;
 }
+
 .selected-application-link {
     background-color: #0070d2;
     color: white;
 }
+
 .selected-application-link:hover {
     background-color: #005fb2;
     text-decoration: none;
 }
+
+.no-applications {
+    font-size: 0.75rem;
+    color: #4b4b5c;
+    padding: 0.25rem 0;
+}
+
 .top-skills {
     margin-bottom: 1rem;
 }
+
 .skills-list {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
 }
+
 .skill-chip {
     background-color: #e8f0fe;
     border-radius: 1rem;
@@ -168,22 +233,53 @@
     cursor: pointer;
     transition: background-color 0.2s;
 }
+
 .skill-chip:hover {
     background-color: #cfe2ff;
     text-decoration: underline;
 }
+
 .score-sla-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 1rem;
 }
-.match-score {
+
+/* Match Score – центрирование */
+.match-score-centered {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    flex: 2;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
 }
+
+.match-score-centered .metric-label {
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.match-score-centered .progress-bar-container {
+    width: 250px;
+    height: 10px;
+    background-color: #e0e0e0;
+    border-radius: 1rem;
+    overflow: hidden;
+}
+
+.match-score-centered .progress-bar-fill {
+    height: 100%;
+    border-radius: 1rem;
+}
+
+.match-score-centered .score-percent {
+    font-weight: 600;
+    font-size: 0.875rem;
+    min-width: 45px;
+}
+
+
 .progress-bar-container {
     background-color: #e0e0e0;
     border-radius: 1rem;
@@ -191,50 +287,64 @@
     height: 8px;
     overflow: hidden;
 }
+
 .progress-bar-fill {
     height: 100%;
     border-radius: 1rem;
 }
+
 .score-percent {
     font-weight: 600;
     min-width: 45px;
 }
-.sla-info {
+
+/* SLA – центрирование или выравнивание по центру (под Match Score) */
+.sla-centered {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.25rem;
+    margin-bottom: 1rem;
 }
-.sla-label {
+.sla-centered .sla-label {
     font-weight: 600;
-    margin-right: 0.25rem;
     font-size: 0.75rem;
 }
+
 .sla-good {
     fill: #2e844a;
 }
+
 .sla-warning {
     fill: #e6a700;
 }
+
 .sla-breached {
     fill: #ba0517;
 }
+
 .sla-good-text {
     color: #2e844a;
 }
+
 .sla-warning-text {
     color: #e6a700;
 }
+
 .sla-breached-text {
     color: #ba0517;
 }
+
 .quick-actions {
     display: flex;
     gap: 0.5rem;
     margin-bottom: 1rem;
 }
+
 .warnings {
     margin-top: 0.5rem;
 }
+
 .warning-item {
     display: flex;
     align-items: center;
@@ -243,9 +353,11 @@
     color: #ba0517;
     margin-bottom: 0.25rem;
 }
+
 .warning-icon {
     fill: #ba0517;
 }
+
 .modal-backdrop {
     position: fixed;
     top: 0;
@@ -258,6 +370,7 @@
     justify-content: center;
     z-index: 1000;
 }
+
 .modal-container {
     background: white;
     border-radius: 0.25rem;
@@ -266,9 +379,11 @@
     max-height: 90%;
     overflow: auto;
 }
+
 .modal-large {
     max-width: 1000px;
 }
+
 .modal-header {
     display: flex;
     justify-content: space-between;
@@ -276,6 +391,7 @@
     padding: 0.75rem 1rem;
     border-bottom: 1px solid #dddbda;
 }
+
 .modal-content {
     padding: 1rem;
 }

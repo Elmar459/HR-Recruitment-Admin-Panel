@@ -15,6 +15,7 @@ export default class CandidatePhotoTile extends NavigationMixin(LightningElement
     @track recentApplications = [];
     @track warnings = [];
     @track topSkills = [];
+    @track selectedPositionId = null;
     @track selectedApplicationId = null;
     @track isLoadingPhoto = false;
     @track showMessagingModal = false;
@@ -27,6 +28,37 @@ export default class CandidatePhotoTile extends NavigationMixin(LightningElement
 
     wiredSummaryResult;
 
+    // Уникальные позиции для кнопок
+    get uniquePositions() {
+        const map = new Map();
+        this.recentApplications.forEach(app => {
+            if (app.positionId && app.positionName && !map.has(app.positionId)) {
+                map.set(app.positionId, { 
+                    id: app.positionId, 
+                    name: app.positionName,
+                    buttonClass: this.getPositionButtonClass(app.positionId)
+                });
+            }
+        });
+        return Array.from(map.values());
+    }
+
+    // Фильтр заявок по выбранной позиции
+    get filteredApplications() {
+        if (!this.selectedPositionId) return [];
+        return this.recentApplications
+            .filter(app => app.positionId === this.selectedPositionId)
+            .map(app => ({
+                ...app,
+                linkClass: this.getApplicationLinkClass(app.id)
+            }));
+    }
+
+    get showNoApplicationsMessage() {
+        return this.filteredApplications.length === 0 && this.selectedPositionId;
+    }
+
+    // Выбранная заявка (объект)
     get selectedApplication() {
         return this.recentApplications.find(app => app.id === this.selectedApplicationId) || null;
     }
@@ -38,7 +70,7 @@ export default class CandidatePhotoTile extends NavigationMixin(LightningElement
         const date = this.selectedApplication?.appliedDate;
         if (!date) return '';
         const d = new Date(date);
-        return new Intl.DateTimeFormat('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }).format(d);
+        return `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
     }
     get selectedDaysInStage() {
         return this.selectedApplication?.daysInStage ?? '';
@@ -65,7 +97,7 @@ export default class CandidatePhotoTile extends NavigationMixin(LightningElement
     get formattedNextInterviewDate() {
         if (!this.nextInterview?.scheduledTime) return '';
         const d = new Date(this.nextInterview.scheduledTime);
-        return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}`;
     }
     get progressBarStyle() {
         const score = this.selectedMatchScore;
@@ -117,39 +149,68 @@ export default class CandidatePhotoTile extends NavigationMixin(LightningElement
             this.recentApplications = result.data.recentApplications || [];
             this.warnings = result.data.warnings || [];
             this.topSkills = result.data.topSkills || [];
-            if (this.recentApplications.length > 0 && !this.selectedApplicationId) {
-                this.selectedApplicationId = this.recentApplications[0].id;
-                this.loadNextInterview();
-            } else if (this.selectedApplicationId) {
-                this.loadNextInterview();
-            }
+            this.initSelection();
         } else if (result.error) {
             console.error('Apex error', result.error);
+        }
+    }
+
+    initSelection() {
+        if (this.recentApplications.length === 0) return;
+        // Уникальные позиции
+        const unique = this.uniquePositions;
+        if (unique.length === 0) return;
+        // Выбираем первую позицию, если ещё не выбрана
+        if (!this.selectedPositionId) {
+            this.selectedPositionId = unique[0].id;
+        }
+        // Выбираем первую заявку из отфильтрованных
+        const filtered = this.filteredApplications;
+        if (filtered.length > 0 && !this.selectedApplicationId) {
+            this.selectedApplicationId = filtered[0].id;
+            this.loadNextInterview();
+        } else if (this.selectedApplicationId) {
+            // Если заявка уже выбрана, но может не принадлежать текущей позиции – исправляем
+            const stillValid = filtered.some(app => app.id === this.selectedApplicationId);
+            if (!stillValid && filtered.length > 0) {
+                this.selectedApplicationId = filtered[0].id;
+                this.loadNextInterview();
+            }
         }
     }
 
     async loadNextInterview() {
         if (!this.selectedApplicationId) return;
         try {
-            this.nextInterview = await getNextInterview({ applicationId: this.selectedApplicationId });
+            const next = await getNextInterview({ applicationId: this.selectedApplicationId });
+            this.nextInterview = next;
         } catch (error) {
             console.error('Error loading next interview', error);
         }
     }
 
-    selectApplication(event) {
-        const appId = event.currentTarget.dataset.id;
-        if (this.selectedApplicationId === appId) return;
-        this.selectedApplicationId = appId;
-        this.loadNextInterview();
-        if (this.wiredSummaryResult) {
-            refreshApex(this.wiredSummaryResult);
+    selectPosition(event) {
+        const positionId = event.currentTarget.dataset.positionId;
+        if (this.selectedPositionId === positionId) return;
+        this.selectedPositionId = positionId;
+        const filtered = this.filteredApplications;
+        if (filtered.length > 0) {
+            this.selectedApplicationId = filtered[0].id;
+            this.loadNextInterview();
+        } else {
+            this.selectedApplicationId = null;
+            this.nextInterview = null;
         }
+        if (this.wiredSummaryResult) refreshApex(this.wiredSummaryResult);
     }
 
     navigateToApplication(event) {
         const appId = event.currentTarget.dataset.id;
         if (!appId) return;
+        event.preventDefault();
+        this.selectedApplicationId = appId;
+        this.loadNextInterview();
+        if (this.wiredSummaryResult) refreshApex(this.wiredSummaryResult);
         this[NavigationMixin.Navigate]({
             type: 'standard__recordPage',
             attributes: {
@@ -171,6 +232,14 @@ export default class CandidatePhotoTile extends NavigationMixin(LightningElement
                 actionName: 'view'
             }
         });
+    }
+
+    getPositionButtonClass(positionId) {
+        return positionId === this.selectedPositionId ? 'position-chip active' : 'position-chip';
+    }
+
+    getApplicationLinkClass(appId) {
+        return appId === this.selectedApplicationId ? 'application-link selected' : 'application-link';
     }
 
     handleUploadClick() {
