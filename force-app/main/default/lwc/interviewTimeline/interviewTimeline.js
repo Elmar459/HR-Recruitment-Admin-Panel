@@ -67,9 +67,29 @@ export default class InterviewTimeline extends NavigationMixin(LightningElement)
             const stateValue = stage.state || 'pending';
             const isCompleted = stateValue === 'completed';
             const isExpanded = this.expandedStageKey === key;
-            const feedback = stage.interview?.feedbackDetails;
             const canSelect = stateValue === 'available';
             const isSelected = this.selectedStageKey === key;
+
+            // Преобразуем список фидбеков
+            let feedbacks = [];
+            let noFeedbacks = true;
+            if (stage.interview && stage.interview.feedbacks && stage.interview.feedbacks.length) {
+                feedbacks = stage.interview.feedbacks.map(fb => ({
+                    ...fb,
+                    interviewerName: stage.interview.interviewerName,
+                    createdDateFormatted: fb.createdDate ? new Date(fb.createdDate).toLocaleString() : 'Date unknown',
+                    compositeScore: this.scoreLabel(fb.compositeScore),
+                    technicalScore: this.scoreLabel(fb.technicalScore),
+                    communicationScore: this.scoreLabel(fb.communicationScore),
+                    cultureFitScore: this.scoreLabel(fb.cultureFitScore),
+                    strengths: fb.strengths || '—',
+                    weaknesses: fb.weaknesses || '—',
+                    comments: fb.comments || '—',
+                    recordUrl: `/lightning/r/Interview_Feedback__c/${fb.id}/view`  // ← ссылка на запись
+                }));
+                noFeedbacks = false;
+            }
+
             return {
                 ...stage,
                 key,
@@ -84,19 +104,9 @@ export default class InterviewTimeline extends NavigationMixin(LightningElement)
                 stepClass: `it-stage-card it-stage-card_${stateValue}${isSelected ? ' it-stage-card_selected' : ''}`,
                 iconName: this.stageIcon(stateValue),
                 variant: stateValue === 'rejected' ? 'error' : stateValue === 'completed' ? 'success' : 'inverse',
-                dateLabel: stage.dateTimeValue ? new Intl.DateTimeFormat(undefined, {
-                    dateStyle: 'medium',
-                    timeStyle: 'short'
-                }).format(new Date(stage.dateTimeValue)) : 'Not scheduled',
-                interviewerName: stage.interview?.interviewerName || 'Interviewer not assigned',
-                recommendation: feedback?.recommendation || stage.interview?.recommendation || 'No recommendation',
-                technicalScore: this.scoreLabel(feedback?.technicalScore),
-                communicationScore: this.scoreLabel(feedback?.communicationScore),
-                cultureFitScore: this.scoreLabel(feedback?.cultureFitScore),
-                compositeScore: this.scoreLabel(feedback?.compositeScore || stage.score),
-                strengths: feedback?.strengths || 'No strengths captured yet.',
-                weaknesses: feedback?.weaknesses || 'No weaknesses captured yet.',
-                comments: feedback?.comments || stage.interview?.feedback || 'No feedback comments yet.',
+                dateLabel: stage.dateTimeValue ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(stage.dateTimeValue)) : 'Not scheduled',
+                feedbacks,
+                noFeedbacks,
                 interviewUrl: stage.interview?.id ? `/lightning/r/Interview__c/${stage.interview.id}/view` : null
             };
         });
@@ -274,8 +284,8 @@ export default class InterviewTimeline extends NavigationMixin(LightningElement)
         }
         this.isScheduling = true;
         try {
-            await scheduleInterviewAtSlot({ 
-                applicationId: this.recordId, 
+            await scheduleInterviewAtSlot({
+                applicationId: this.recordId,
                 selectedTime: isoDateTime,
                 interviewType: this.selectedInterviewType
             });

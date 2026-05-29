@@ -411,11 +411,10 @@ public with sharing class RecruitmentLwcController {
         item.dateTimeValue = (Datetime) getIfPresent(interview, 'Date_Time__c');
         item.score = asDecimal(getIfPresent(interview, 'Average_Interview_Score__c'));
         item.interviewerName = relatedName(interview, 'Interviewer__r');
-        item.recommendation = asString(getIfPresent(interview, 'Recommendation__c'));
         item.feedback = asString(getIfPresent(interview, 'Feedback_Summary__c'));
-        item.feedbackDetails = getFeedbackItem(item.id);
+        item.feedbacks = getFeedbackItems(item.id);   
         return item;
-    }
+}
 
     private static List<MatchDetail> buildMatchDetails(Id applicationId, SObject app) {
         List<MatchDetail> details = new List<MatchDetail>();
@@ -440,37 +439,44 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static List<ScoreTrendPoint> buildScoreTrend(List<StageItem> stages) {
-        List<ScoreTrendPoint> points = new List<ScoreTrendPoint>();
-        for (StageItem stage : stages) {
-            if (stage.state == 'completed' && stage.interview != null && stage.interview.feedbackDetails != null) {
-                ScoreTrendPoint point = new ScoreTrendPoint();
-                point.label = stage.type;
-                point.score = stage.interview.feedbackDetails.compositeScore != null
-                    ? stage.interview.feedbackDetails.compositeScore
-                    : stage.score;
-                points.add(point);
-            }
+    List<ScoreTrendPoint> points = new List<ScoreTrendPoint>();
+    for (StageItem stage : stages) {
+        if (stage.state == 'completed' && stage.interview != null && 
+            stage.interview.feedbacks != null && !stage.interview.feedbacks.isEmpty()) {
+            
+            FeedbackItem latest = stage.interview.feedbacks[0]; // первый после сортировки по убыванию даты
+            ScoreTrendPoint point = new ScoreTrendPoint();
+            point.label = stage.type;
+            point.score = latest.compositeScore != null ? latest.compositeScore : stage.score;
+            points.add(point);
         }
-        return points;
     }
+    return points;
+}
 
-    private static FeedbackItem getFeedbackItem(Id interviewId) {
-        if (interviewId == null || !objectExists(FEEDBACK_OBJECT)) return null;
-        List<SObject> feedbackRecords = Database.query(buildFeedbackQuery(interviewId));
-        if (feedbackRecords.isEmpty()) return null;
-        SObject feedback = feedbackRecords[0];
-        FeedbackItem item = new FeedbackItem();
-        item.id = (Id) feedback.get('Id');
-        item.technicalScore = asDecimal(getIfPresent(feedback, 'Technical_Score__c'));
-        item.communicationScore = asDecimal(getIfPresent(feedback, 'Communication_Score__c'));
-        item.cultureFitScore = asDecimal(getIfPresent(feedback, 'Culture_Fit_Score__c'));
-        item.compositeScore = asDecimal(getIfPresent(feedback, 'Composite_Score__c'));
-        item.strengths = asString(getFirstPresent(feedback, new List<String>{ 'Strengths__c', 'Strength__c' }));
-        item.weaknesses = asString(getFirstPresent(feedback, new List<String>{ 'Weaknesses__c', 'Weakness__c' }));
-        item.comments = asString(getIfPresent(feedback, 'Comments__c'));
-        item.recommendation = asString(getIfPresent(feedback, 'Recommendation__c'));
-        return item;
-    }
+    private static List<FeedbackItem> getFeedbackItems(Id interviewId) {
+        List<FeedbackItem> result = new List<FeedbackItem>();
+        if (interviewId == null || !objectExists(FEEDBACK_OBJECT)) return result;
+        
+        String query = 'SELECT Id, Technical_Score__c, Communication_Score__c, Culture_Fit_Score__c, Composite_Score__c, ' +
+                    'Strengths__c, Weaknesses__c, Comments__c, CreatedDate ' +
+                    'FROM Interview_Feedback__c WHERE Interview__c = :interviewId ORDER BY CreatedDate DESC NULLS LAST';
+        
+        for (SObject fb : Database.query(query)) {
+            FeedbackItem item = new FeedbackItem();
+            item.id = (Id) fb.get('Id');
+            item.technicalScore = asDecimal(getIfPresent(fb, 'Technical_Score__c'));
+            item.communicationScore = asDecimal(getIfPresent(fb, 'Communication_Score__c'));
+            item.cultureFitScore = asDecimal(getIfPresent(fb, 'Culture_Fit_Score__c'));
+            item.compositeScore = asDecimal(getIfPresent(fb, 'Composite_Score__c'));
+            item.strengths = asString(getIfPresent(fb, 'Strengths__c'));
+            item.weaknesses = asString(getIfPresent(fb, 'Weaknesses__c'));
+            item.comments = asString(getIfPresent(fb, 'Comments__c'));
+            item.createdDate = (Datetime) getIfPresent(fb, 'CreatedDate');  // заменяем submittedAt
+            result.add(item);
+        }
+        return result;
+}
 
     private static MessageItem toMessageItem(SObject message) {
         MessageItem item = new MessageItem();
@@ -523,7 +529,6 @@ public with sharing class RecruitmentLwcController {
         addField(fields, INTERVIEW_OBJECT, 'Status__c');
         addField(fields, INTERVIEW_OBJECT, 'Date_Time__c');
         addField(fields, INTERVIEW_OBJECT, 'Average_Interview_Score__c');
-        addField(fields, INTERVIEW_OBJECT, 'Recommendation__c');
         addField(fields, INTERVIEW_OBJECT, 'Feedback_Summary__c');
         fields.add('Interviewer__r.Name');
         return 'SELECT ' + String.join(fields, ',')
@@ -542,7 +547,6 @@ public with sharing class RecruitmentLwcController {
         addField(fields, FEEDBACK_OBJECT, 'Weaknesses__c');
         addField(fields, FEEDBACK_OBJECT, 'Weakness__c');
         addField(fields, FEEDBACK_OBJECT, 'Comments__c');
-        addField(fields, FEEDBACK_OBJECT, 'Recommendation__c');
         return 'SELECT ' + String.join(fields, ',')
             + ' FROM Interview_Feedback__c WHERE Interview__c = \'' + String.escapeSingleQuotes(String.valueOf(interviewId))
             + '\' ORDER BY Submitted_At__c DESC NULLS LAST LIMIT 1';
@@ -790,7 +794,7 @@ public with sharing class RecruitmentLwcController {
         @AuraEnabled public String interviewerName;
         @AuraEnabled public String recommendation;
         @AuraEnabled public String feedback;
-        @AuraEnabled public FeedbackItem feedbackDetails;
+        @AuraEnabled public List<FeedbackItem> feedbacks; 
     }
 
     public class StageItem {
@@ -812,8 +816,8 @@ public with sharing class RecruitmentLwcController {
         @AuraEnabled public String strengths;
         @AuraEnabled public String weaknesses;
         @AuraEnabled public String comments;
-        @AuraEnabled public String recommendation;
-    }
+        @AuraEnabled public Datetime createdDate;   
+}
 
     public class ScoreTrendPoint {
         @AuraEnabled public String label;
