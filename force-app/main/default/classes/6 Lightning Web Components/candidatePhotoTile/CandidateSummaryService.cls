@@ -30,6 +30,7 @@ public with sharing class CandidateSummaryService {
         @AuraEnabled public SlaInfo sla;
         @AuraEnabled public Integer currentStageOrder;
         @AuraEnabled public Integer totalStages;
+        @AuraEnabled public Boolean isActive;
     }
     
     public class SlaInfo {
@@ -91,12 +92,11 @@ public with sharing class CandidateSummaryService {
         
         // 3. Applications – добавили поле Name
         List<Application__c> apps = [SELECT Id, Name, Status__c, Applied_Date__c, Last_Stage_Change_Date__c,
-                                            Match_Score__c, Position__c, Position__r.Name
-                                     FROM Application__c
-                                     WHERE Candidate__c = :candidateId
-                                     AND Status__c NOT IN ('Rejected', 'Withdrawn', 'Hired')
-                                     ORDER BY CreatedDate DESC
-                                     LIMIT 5];
+                             Match_Score__c, Position__c, Position__r.Name
+                             FROM Application__c
+                             WHERE Candidate__c = :candidateId
+                             ORDER BY CreatedDate DESC
+                             LIMIT 5];
         
         // SLA configs
         Map<String, SLA_Config__c> slaConfigByStage = new Map<String, SLA_Config__c>();
@@ -113,10 +113,12 @@ public with sharing class CandidateSummaryService {
         for (Application__c app : apps) {
             ApplicationInfo appInfo = new ApplicationInfo();
             appInfo.id = app.Id;
-            appInfo.applicationNumber = app.Name; // теперь поле Name есть в запросе
+            appInfo.applicationNumber = app.Name;
             appInfo.positionId = app.Position__c;
             appInfo.positionName = app.Position__r?.Name;
+            appInfo.isActive = (app.Status__c != 'Rejected' && app.Status__c != 'Withdrawn' && app.Status__c != 'Hired');
             appInfo.status = app.Status__c;
+            appInfo.stage = getPicklistLabel('Application__c', 'Status__c', app.Status__c);
             appInfo.appliedDate = app.Applied_Date__c;
             Integer days = 0;
             if (app.Last_Stage_Change_Date__c != null) {
@@ -164,6 +166,17 @@ public with sharing class CandidateSummaryService {
         
         return res;
     }
+
+    private static String getPicklistLabel(String objectName, String fieldName, String apiValue) {
+    Schema.DescribeFieldResult fieldDescribe = Schema.getGlobalDescribe()
+        .get(objectName).getDescribe().fields.getMap().get(fieldName).getDescribe();
+    for (Schema.PicklistEntry entry : fieldDescribe.getPicklistValues()) {
+        if (entry.getValue() == apiValue) {
+            return entry.getLabel();
+        }
+    }
+    return apiValue; // fallback
+}
     
     @AuraEnabled(cacheable=true)
     public static List<InterviewSummary> getInterviewsForApplication(Id applicationId) {

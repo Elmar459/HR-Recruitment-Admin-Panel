@@ -12,19 +12,15 @@ public with sharing class ApplicationTriggerHandler {
     }
 
     public static void beforeUpdate(List<Application__c> apps, Map<Id, Application__c> oldMap) {
-        // 1. Сначала обрабатываем смену статуса: валидация и обновление даты
+        
         for (Application__c app : apps) {
             Application__c oldApp = oldMap.get(app.Id);
             if (app.Status__c != oldApp.Status__c) {
-                // Временно отключаем валидацию переходов, чтобы массовое перемещение работало
-                // if (!StatusTransitionValidator.validate(oldApp.Status__c, app.Status__c)) {
-                //     app.Status__c.addError('Invalid status transition.');
-                // }
                 app.Last_Stage_Change_Date__c = Date.today();
             }
         }
         
-        // 2. Теперь, когда даты актуальны, проверяем SLA
+        
         SLAMonitorService.markBreaches(apps, oldMap);
     }
 
@@ -43,7 +39,7 @@ public with sharing class ApplicationTriggerHandler {
         }
         if (!updates.isEmpty()) update updates;
         
-        // 7.1 Chatter - Post application created event
+       
         ChatterService.postApplicationCreated(apps);
     }
 

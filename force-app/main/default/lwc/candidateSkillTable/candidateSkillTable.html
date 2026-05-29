@@ -1,0 +1,45 @@
+<template>
+    <lightning-card title="Candidate Skills" icon-name="standard:skill">
+        <div class="slds-p-around_medium">
+            <div class="slds-grid slds-grid_align-end slds-m-bottom_small">
+                <lightning-button
+                    label="New Candidate Skill"
+                    variant="brand"
+                    icon-name="utility:add"
+                    onclick={handleNew}>
+                </lightning-button>
+                <lightning-button-icon
+                    icon-name="utility:refresh"
+                    variant="bare"
+                    alternative-text="Refresh"
+                    title="Refresh"
+                    class="slds-m-left_x-small"
+                    onclick={refresh}>
+                </lightning-button-icon>
+            </div>
+
+            <template if:false={hasRecordId}>
+                <div class="slds-text-color_error slds-m-bottom_medium">
+                    Please provide a Candidate ID. If you are on a Candidate record page, ensure the component is placed correctly.
+                </div>
+            </template>
+
+            <template if:true={hasRecordId}>
+                <div if:true={isLoading} class="slds-text-align_center slds-m-vertical_medium">
+                    <lightning-spinner alternative-text="Loading..." size="medium"></lightning-spinner>
+                </div>
+                <lightning-datatable
+                    key-field="id"
+                    data={skills}
+                    columns={columns}
+                    hide-checkbox-column="true"
+                    show-row-number-column="true">
+                </lightning-datatable>
+            </template>
+
+            <template if:true={error}>
+                <div class="slds-text-color_error slds-m-top_medium">{error}</div>
+            </template>
+        </div>
+    </lightning-card>
+</template>

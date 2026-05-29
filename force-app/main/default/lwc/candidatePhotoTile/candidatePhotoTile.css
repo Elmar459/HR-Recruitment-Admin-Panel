@@ -120,6 +120,11 @@
     font-size: 0.875rem;
 }
 
+.stage-rejected {
+    color: #ba0517;
+    font-weight: bold;
+}
+
 .next-interview {
     display: inline-flex;
     align-items: center;

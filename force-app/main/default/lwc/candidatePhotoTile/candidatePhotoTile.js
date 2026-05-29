@@ -33,8 +33,8 @@ export default class CandidatePhotoTile extends NavigationMixin(LightningElement
         const map = new Map();
         this.recentApplications.forEach(app => {
             if (app.positionId && app.positionName && !map.has(app.positionId)) {
-                map.set(app.positionId, { 
-                    id: app.positionId, 
+                map.set(app.positionId, {
+                    id: app.positionId,
                     name: app.positionName,
                     buttonClass: this.getPositionButtonClass(app.positionId)
                 });
@@ -64,13 +64,18 @@ export default class CandidatePhotoTile extends NavigationMixin(LightningElement
     }
 
     get selectedStage() {
-        return this.selectedApplication?.stage || '';
+        const app = this.selectedApplication;
+        if (!app) return '';
+        if (app.status === 'Rejected') {
+            return 'Rejected';  // или можно вернуть app.status
+        }
+        return app.stage || app.status;
     }
     get selectedAppliedDate() {
         const date = this.selectedApplication?.appliedDate;
         if (!date) return '';
         const d = new Date(date);
-        return `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
+        return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
     }
     get selectedDaysInStage() {
         return this.selectedApplication?.daysInStage ?? '';
@@ -97,7 +102,7 @@ export default class CandidatePhotoTile extends NavigationMixin(LightningElement
     get formattedNextInterviewDate() {
         if (!this.nextInterview?.scheduledTime) return '';
         const d = new Date(this.nextInterview.scheduledTime);
-        return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}`;
+        return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     }
     get progressBarStyle() {
         const score = this.selectedMatchScore;

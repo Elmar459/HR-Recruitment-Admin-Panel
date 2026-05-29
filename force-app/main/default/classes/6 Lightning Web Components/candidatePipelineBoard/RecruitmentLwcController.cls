@@ -843,22 +843,47 @@ public with sharing class RecruitmentLwcController {
         @AuraEnabled public String createdByName;
     }
 
+    //  FILTER OPTIONS METHODS 
+    @AuraEnabled(cacheable=true)
+    public static FilterOptions getFilterOptions() {
+        FilterOptions options = new FilterOptions();
+    
+    
+    
+    options.departments.add(new FilterOption('IT', 'IT'));
+    options.departments.add(new FilterOption('HR', 'HR'));
+    options.departments.add(new FilterOption('Sales', 'Sales'));
+    options.departments.add(new FilterOption('Marketing', 'Marketing'));
+    options.departments.add(new FilterOption('Finance', 'Finance'));
+    
+    options.recruiters.add(new FilterOption('John Doe', 'John Doe'));
+    options.recruiters.add(new FilterOption('Jane Smith', 'Jane Smith'));
+    options.recruiters.add(new FilterOption('Mike Johnson', 'Mike Johnson'));
+    
+    options.positions.add(new FilterOption('IT Manager', 'IT Manager'));
+    options.positions.add(new FilterOption('IT Specialist', 'IT Specialist'));
+    options.positions.add(new FilterOption('Sales Manager', 'Sales Manager'));
+    options.positions.add(new FilterOption('HR Generalist', 'HR Generalist'));
+    
+    
+    
+    return options;
+}
+
+    // Вспомогательные классы (если их ещё нет в вашем контроллере)
     public class FilterOptions {
         @AuraEnabled public List<FilterOption> departments = new List<FilterOption>();
         @AuraEnabled public List<FilterOption> recruiters = new List<FilterOption>();
         @AuraEnabled public List<FilterOption> positions = new List<FilterOption>();
-    }
+}
 
     public class FilterOption {
         @AuraEnabled public String label;
         @AuraEnabled public String value;
-        public FilterOption(String value, String label) { this.value = value; this.label = label; }
+        
+        public FilterOption(String value, String label) {
+            this.value = value;
+            this.label = label;
     }
-
-    public class ChatterItem {
-        @AuraEnabled public Id id;
-        @AuraEnabled public String body;
-        @AuraEnabled public Datetime createdDate;
-        @AuraEnabled public String createdByName;
-    }
+}
 }

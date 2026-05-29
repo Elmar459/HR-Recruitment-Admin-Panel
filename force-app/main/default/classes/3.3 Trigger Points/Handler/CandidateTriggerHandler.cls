@@ -7,10 +7,9 @@ public with sharing class CandidateTriggerHandler {
     }
 
     public static void afterInsert(List<Candidate__c> candidates) {
-        // Существующая логика: создание Welcome Task
+       
         createWelcomeTasks(candidates);
-        
-        // НОВОЕ: загрузка фото из LinkedIn для новых кандидатов, у которых указан URL
+        // Асинхронная загрузка фото по LinkedIn URL
         enqueueLinkedInPhotoJobs(candidates);
     }
 
@@ -30,7 +29,7 @@ public with sharing class CandidateTriggerHandler {
         enqueueLinkedInPhotoJobs(candidatesWithNewLinkedIn);
     }
 
-    // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ (существующие) ==========
+    
     private static void normalizeNames(List<Candidate__c> candidates) {
         for (Candidate__c candidate : candidates) {
             candidate.First_Name__c = HrTextUtil.toTitleCase(candidate.First_Name__c);
@@ -94,7 +93,7 @@ public with sharing class CandidateTriggerHandler {
         }
     }
 
-    // ========== НОВЫЙ МЕТОД: АСИНХРОННАЯ ЗАГРУЗКА ФОТО ==========
+    // НОВЫЙ МЕТОД: АСИНХРОННАЯ ЗАГРУЗКА ФОТО 
     private static void enqueueLinkedInPhotoJobs(List<Candidate__c> candidates) {
         if (candidates == null || candidates.isEmpty()) return;
         System.enqueueJob(new LinkedInPhotoQueueable(candidates));

@@ -40,7 +40,9 @@
                 <div class="summary-metrics">
                     <div class="metric">
                         <span class="metric-label">Stage:</span>
-                        <span class="metric-value">{selectedStage}</span>
+                        <span class="metric-value {selectedStage === 'Rejected' ? 'stage-rejected' : ''}">
+                            {selectedStage}
+                        </span>
                     </div>
                     <div class="metric">
                         <span class="metric-label">Applied:</span>

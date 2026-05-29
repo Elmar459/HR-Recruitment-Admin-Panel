@@ -2,12 +2,14 @@ import { LightningElement, api, wire } from 'lwc';
 import { refreshApex } from '@salesforce/apex';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { subscribe, unsubscribe, onError } from 'lightning/empApi';
-import getMessages from '@salesforce/apex/RecruitmentLwcController.getMessages';
-import sendMessage from '@salesforce/apex/RecruitmentLwcController.sendMessage';
-import getChatterPosts from '@salesforce/apex/RecruitmentLwcController.getChatterPosts';
-import postToChatter from '@salesforce/apex/RecruitmentLwcController.postToChatter';
-import markAllMessagesRead from '@salesforce/apex/RecruitmentLwcController.markAllMessagesRead';
-import publishTypingIndicator from '@salesforce/apex/RecruitmentLwcController.publishTypingIndicator';
+
+// Импорты из MessagingController (стабильные методы)
+import getMessages from '@salesforce/apex/MessagingController.getMessages';
+import sendMessage from '@salesforce/apex/MessagingController.sendMessage';
+import getChatterPosts from '@salesforce/apex/MessagingController.getChatterPosts';
+import postToChatter from '@salesforce/apex/MessagingController.postToChatter';
+import markAllMessagesRead from '@salesforce/apex/MessagingController.markAllMessagesRead';
+import publishTypingIndicator from '@salesforce/apex/MessagingController.publishTypingIndicator';
 
 const EVENT_CHANNEL = '/event/Recruitment_Message__e';
 const POLLING_INTERVAL_MS = 5000;
@@ -55,6 +57,8 @@ export default class MessagingPanel extends LightningElement {
         this.wiredMessages = result;
         if (result.data) {
             this.messages = result.data;
+        } else if (result.error) {
+            console.error('Error loading messages', result.error);
         }
     }
 
@@ -63,6 +67,8 @@ export default class MessagingPanel extends LightningElement {
         this.wiredChatter = result;
         if (result.data) {
             this.chatterPosts = result.data;
+        } else if (result.error) {
+            console.error('Error loading chatter', result.error);
         }
     }
 
@@ -95,7 +101,7 @@ export default class MessagingPanel extends LightningElement {
                     channelIcon: this.channelIcon(channel),
                     sender,
                     createdLabel: this.formatDate(message.createdDate),
-                    unreadClass: message.isRead === false ? 'mp-unread-dot' : 'mp-unread-dot mp-unread-dot_read'
+                    unreadClass: message.isRead === false ? 'mp-unread-dot' : 'mp-unread-dot_read'
                 };
             });
     }
@@ -167,7 +173,7 @@ export default class MessagingPanel extends LightningElement {
         try {
             const message = await sendMessage({
                 applicationId: this.recordId,
-                body,
+                body: body,
                 channel: this.selectedChannel
             });
             this.upsertMessage(message);
@@ -175,7 +181,14 @@ export default class MessagingPanel extends LightningElement {
             this.publishTyping(false);
             await refreshApex(this.wiredMessages);
         } catch (error) {
-            this.showToast('Could not send message', this.reduceError(error), 'error');
+            console.error('Send error', error);
+            let errorMsg = 'Unexpected error';
+            if (error.body && error.body.message) {
+                errorMsg = error.body.message;
+            } else if (error.message) {
+                errorMsg = error.message;
+            }
+            this.showToast('Could not send message', errorMsg, 'error');
         } finally {
             this.isSending = false;
         }
@@ -193,6 +206,7 @@ export default class MessagingPanel extends LightningElement {
             this.chatterDraft = '';
             await refreshApex(this.wiredChatter);
         } catch (error) {
+            console.error('Chatter error', error);
             this.showToast('Could not post to Chatter', this.reduceError(error), 'error');
         } finally {
             this.isPosting = false;
@@ -202,7 +216,7 @@ export default class MessagingPanel extends LightningElement {
     async handleMarkAllRead() {
         try {
             await markAllMessagesRead({ applicationId: this.recordId });
-            this.messages = this.messages.map((message) => ({ ...message, isRead: true }));
+            this.messages = this.messages.map((msg) => ({ ...msg, isRead: true }));
             await refreshApex(this.wiredMessages);
         } catch (error) {
             this.showToast('Could not mark messages read', this.reduceError(error), 'error');
@@ -273,7 +287,7 @@ export default class MessagingPanel extends LightningElement {
         window.clearTimeout(this.typingTimer);
         publishTypingIndicator({
             applicationId: this.recordId,
-            isTyping
+            isTyping: isTyping
         }).catch(() => {});
         if (isTyping) {
             this.typingTimer = window.setTimeout(() => {
@@ -287,7 +301,7 @@ export default class MessagingPanel extends LightningElement {
 
     upsertMessage(message) {
         if (message.id && this.messages.some((item) => item.id === message.id)) {
-            this.messages = this.messages.map((item) => item.id === message.id ? message : item);
+            this.messages = this.messages.map((item) => (item.id === message.id ? message : item));
             return;
         }
         this.messages = [...this.messages, message];
@@ -296,8 +310,10 @@ export default class MessagingPanel extends LightningElement {
     matchesFilters(message) {
         const direction = message.direction || 'Outbound';
         const channel = message.channel || 'Portal';
-        return (this.directionFilter === 'All' || direction === this.directionFilter)
-            && (this.channelFilter === 'All' || channel === this.channelFilter);
+        return (
+            (this.directionFilter === 'All' || direction === this.directionFilter) &&
+            (this.channelFilter === 'All' || channel === this.channelFilter)
+        );
     }
 
     channelIcon(channel) {
@@ -307,14 +323,19 @@ export default class MessagingPanel extends LightningElement {
         if (channel === 'Chatter') {
             return 'utility:comments';
         }
-        return 'utility:world';
+        if (channel === 'Portal') {
+            return 'utility:world';
+        }
+        return 'utility:chat';
     }
 
     formatDate(value) {
-        return value ? new Intl.DateTimeFormat(undefined, {
-            dateStyle: 'short',
-            timeStyle: 'short'
-        }).format(new Date(value)) : 'Just now';
+        return value
+            ? new Intl.DateTimeFormat(undefined, {
+                  dateStyle: 'short',
+                  timeStyle: 'short'
+              }).format(new Date(value))
+            : 'Just now';
     }
 
     showToast(title, message, variant) {

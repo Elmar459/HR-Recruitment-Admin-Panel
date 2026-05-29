@@ -1,0 +1,26 @@
+<template>
+    <div class="gauge-container slds-box slds-box_x-small slds-text-align_center">
+        <lightning-card title="My Workload" icon-name="standard:user">
+            <div class="gauge">
+                <svg viewBox="0 0 100 100">
+                    <path d="M20,50 a30,30 0 1,1 60,0"
+                          fill="none" stroke="#e0e0e0" stroke-width="8" stroke-linecap="round">
+                    </path>
+                    <path d={activeArcPath}
+                          fill="none" stroke={arcColor} stroke-width="8" stroke-linecap="round">
+                    </path>
+                    <text x="50" y="55" text-anchor="middle" font-size="18" fill="#080707" font-weight="bold">
+                        {workloadScore}%
+                    </text>
+                    <text x="50" y="70" text-anchor="middle" font-size="8" fill="#3e3e3c">
+                        load
+                    </text>
+                </svg>
+            </div>
+            <div class="slds-m-top_small">
+                <lightning-button label="Refresh" variant="neutral" onclick={refreshData}>
+                </lightning-button>
+            </div>
+        </lightning-card>
+    </div>
+</template>

@@ -3,5 +3,12 @@
   "html.validate.styles": false,
   "[html]": {
     "css.validate": false
-  }
+  },
+  "salesforcedx-vscode-lwc.experimentalWatchSupport": true,
+  "eslint.options": {
+    "overrideConfigFile": "eslint.config.js"
+  },
+  "eslint.nodePath": null,
+  "eslint.useESLintClass": true,
+  "salesforcedx-vscode-lwc.lintingMode": "off"
 }

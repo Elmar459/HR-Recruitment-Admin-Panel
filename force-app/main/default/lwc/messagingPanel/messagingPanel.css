@@ -96,6 +96,10 @@
 .mp-chatter-list {
     display: grid;
     gap: 0.5rem;
+    max-height: 24rem;      /* увеличено для 5 записей */
+    overflow-y: auto;
+    padding-right: 0.25rem;
+    min-height: 0;          /* ключевое свойство для корректной прокрутки в grid */
 }
 
 .mp-chatter-post {
@@ -133,5 +137,9 @@
 
     .mp-message {
         max-width: 100%;
+    }
+
+    .mp-chatter-list {
+        max-height: 20rem;
     }
 }
