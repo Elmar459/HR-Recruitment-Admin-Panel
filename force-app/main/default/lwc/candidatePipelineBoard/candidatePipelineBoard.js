@@ -44,7 +44,7 @@ export default class CandidatePipelineBoard extends NavigationMixin(LightningEle
     ];
 
     connectedCallback() {
-        onError(() => {});
+        onError(() => { });
         this.subscribeToPipelineUpdates();
         this.loadFilterOptions();
         this.refreshBoard();
@@ -367,8 +367,8 @@ export default class CandidatePipelineBoard extends NavigationMixin(LightningEle
         if (score !== null) {
             matchLabel = `${score}%`;
             scoreClass = score >= 80 ? 'slds-badge slds-theme_success' :
-                         score >= 60 ? 'slds-badge slds-theme_warning' :
-                         'slds-badge slds-theme_error';
+                score >= 60 ? 'slds-badge slds-theme_warning' :
+                    'slds-badge slds-theme_error';
         } else {
             scoreClass = 'slds-badge';
         }
@@ -423,5 +423,13 @@ export default class CandidatePipelineBoard extends NavigationMixin(LightningEle
             return error.body.map((item) => item.message).join(', ');
         }
         return error?.body?.message || error?.message || 'Unexpected error';
+    }
+
+
+    handleDragEnter(event) {
+        event.currentTarget.classList.add('drag-over');
+    }
+    handleDragLeave(event) {
+        event.currentTarget.classList.remove('drag-over');
     }
 }

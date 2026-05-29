@@ -1,75 +1,274 @@
 :host {
     display: block;
+    --primary-color: #2c7da0;
+    --primary-dark: #1f5e7a;
+    --primary-light: #e9f4f8;
+    --accent-success: #2e7d32;
+    --accent-warning: #ed6c02;
+    --accent-error: #d32f2f;
+    --gray-light: #f8f9fa;
+    --gray-border: #e2e8f0;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.12);
+    --transition-default: all 0.2s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+    --transition-drag: transform 0.15s ease, box-shadow 0.2s ease, background 0.1s ease;
 }
 
-/* Адаптивная ширина колонок */
+/* Увеличиваем ширину колонок, чтобы карточки не выпирали */
 .stage-column {
-    min-width: 280px;
-    width: 280px;
-    max-width: 280px;
+    min-width: 320px;
+    width: 320px;
+    max-width: 320px;
+    transition: var(--transition-default);
+    animation: fadeSlideUp 0.3s ease-out;
+    box-sizing: border-box;
 }
 
-/* Карточки для drag & drop */
+/* Анимация появления колонок */
+@keyframes fadeSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Карточка кандидата – компактная, строго внутри колонки */
 .card-draggable {
     cursor: grab;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-    margin-bottom: 0.5rem;
-    will-change: transform;
+    transition: var(--transition-drag);
+    margin-bottom: 0.6rem;
+    background: white;
+    border-radius: 10px;
+    border: 1px solid var(--gray-border);
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.8rem;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
 }
+
+/* Все внутренние блоки – без переполнения */
+.card-draggable .slds-grid,
+.card-draggable .slds-grid_align-spread {
+    gap: 0.3rem;
+    margin-bottom: 0.25rem;
+    flex-wrap: nowrap;
+    width: 100%;
+}
+
+.card-draggable strong {
+    font-size: 0.85rem;
+    max-width: 160px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+}
+
+.card-draggable .slds-text-body_small {
+    font-size: 0.7rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+}
+
+.card-draggable:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-color);
+}
+
 .card-draggable:active {
     cursor: grabbing;
 }
 
-/* Анимация при перетаскивании – эффект "поднятия" */
+/* Состояние при перетаскивании – затемнение, без прозрачности, лёгкое увеличение */
 .card-draggable.dragging {
-    opacity: 0.7;
-    transform: scale(0.98) rotate(1deg);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
-    transition: all 0.15s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+    cursor: grabbing;
+    background: rgba(0, 0, 0, 0.05);
+    transform: scale(1.02) rotate(0.5deg);
+    box-shadow: var(--shadow-lg);
+    transition: transform 0.12s cubic-bezier(0.2, 0.9, 0.4, 1.1), box-shadow 0.2s;
 }
 
-/* Стиль для просроченного SLA */
+/* Стиль для просроченного SLA – левая полоса */
 .card-breached {
-    border-left: 4px solid #ba0517;
+    border-left: 4px solid var(--accent-error);
+    background: linear-gradient(to right, rgba(211, 47, 47, 0.02), white);
 }
 
 /* Стиль для выбранной карточки */
 .card-selected {
-    outline: 3px solid #0176d3;
-    outline-offset: -2px;
+    outline: none;
+    border: 1px solid var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(44, 125, 160, 0.2);
+    background-color: var(--primary-light);
 }
 
 /* Кликабельные элементы */
 .clickable-name, .clickable-position {
     cursor: pointer;
-    text-decoration: none;
-    transition: text-decoration 0.1s;
-}
-.clickable-name:hover, .clickable-position:hover {
-    text-decoration: underline;
-    color: #0176d3;
+    transition: color 0.15s ease;
+    max-width: 160px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
 }
 
-/* Бейджи */
+.clickable-name:hover, .clickable-position:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+/* Бейджи скора – компактные */
+.slds-badge {
+    border-radius: 30px;
+    font-weight: 500;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.7rem;
+    transition: var(--transition-default);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 .slds-badge.slds-theme_success {
-    background-color: #04844b;
+    background: linear-gradient(135deg, #2e7d32, #1b5e20);
     color: white;
 }
+
 .slds-badge.slds-theme_warning {
-    background-color: #ffc100;
-    color: black;
-}
-.slds-badge.slds-theme_error {
-    background-color: #ba0517;
+    background: linear-gradient(135deg, #ed6c02, #e65100);
     color: white;
+}
+
+.slds-badge.slds-theme_error {
+    background: linear-gradient(135deg, #d32f2f, #b71c1c);
+    color: white;
+}
+
+/* Заголовки колонок */
+.slds-card__header {
+    background: linear-gradient(to bottom, #ffffff, var(--gray-light));
+    border-bottom: 2px solid var(--primary-color);
+    border-radius: 10px 10px 0 0;
+    padding: 0.6rem 0.8rem;
+}
+
+.slds-text-heading_small {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--primary-dark);
+}
+
+/* Тело карточки (контейнер колонки) */
+.slds-card__body {
+    min-height: 250px;
+    padding: 0.5rem 0.25rem;
+    background: var(--gray-light);
+    border-radius: 0 0 10px 10px;
+    transition: background 0.2s ease;
+    overflow-x: hidden;
+}
+
+/* Подсветка колонки при наведении перетаскиваемого элемента */
+.stage-column.drag-over .slds-card__body {
+    background: rgba(44, 125, 160, 0.08);
+    border: 1px dashed var(--primary-color);
 }
 
 /* Пустая область */
-.slds-card__body {
-    min-height: 200px;
+.slds-align_absolute-center {
+    font-style: italic;
+    background: rgba(0,0,0,0.01);
+    border-radius: 8px;
+    margin: 0.5rem;
+    padding: 0.75rem;
+    font-size: 0.75rem;
+}
+
+/* Скроллбар */
+.slds-scrollable_x::-webkit-scrollbar {
+    height: 6px;
+}
+.slds-scrollable_x::-webkit-scrollbar-track {
+    background: var(--gray-border);
+    border-radius: 10px;
+}
+.slds-scrollable_x::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 10px;
+}
+.slds-scrollable_x::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-dark);
+}
+
+/* Анимация для модального окна */
+.slds-backdrop_open {
+    animation: fadeIn 0.2s ease-out;
+}
+
+.slds-modal__container {
+    animation: slideUp 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Спиннер */
 .slds-is-relative {
     position: relative;
+    min-height: 200px;
+}
+
+/* Плавное появление карточек при фильтрации */
+.card-draggable {
+    animation: cardFade 0.2s ease-out;
+}
+
+@keyframes cardFade {
+    from {
+        opacity: 0;
+        transform: scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Иконка SLA с анимацией */
+lightning-icon[icon-name="utility:clock"] {
+    --sds-c-icon-color-foreground: var(--accent-error);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+}
+lightning-icon[icon-name="utility:clock"]:hover {
+    transform: rotate(15deg) scale(1.1);
 }

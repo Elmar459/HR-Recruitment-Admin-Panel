@@ -1,7 +1,7 @@
 <template>
     <lightning-card title="Candidate Pipeline Board" icon-name="standard:kanban">
         <!-- Панель инструментов -->
-        <div class="slds-p-horizontal_medium slds-p-vertical_small">
+        <div class="slds-p-horizontal_medium slds-p-vertical_small slds-border_bottom">
             <div class="slds-grid slds-grid_align-spread slds-gutters">
                 <div class="slds-col slds-size_1-of-2">
                     <lightning-input
@@ -149,11 +149,13 @@
             <div class="slds-grid slds-grid_vertical-align-start slds-nowrap slds-gutters">
                 <template for:each={visibleStages} for:item="stage">
                     <section
-                        key={stage.name}
-                        class="slds-col stage-column"
-                        data-status={stage.name}
-                        ondragover={handleDragOver}
-                        ondrop={handleDrop}>
+                            key={stage.name}
+                            class="slds-col stage-column"
+                            data-status={stage.name}
+                            ondragover={handleDragOver}
+                            ondrop={handleDrop}
+                            ondragenter={handleDragEnter}
+                            ondragleave={handleDragLeave}>
                         <div class="slds-card slds-card_boundary">
                             <div class="slds-card__header slds-grid slds-grid_align-spread">
                                 <h3 class="slds-text-heading_small">{stage.name}</h3>
