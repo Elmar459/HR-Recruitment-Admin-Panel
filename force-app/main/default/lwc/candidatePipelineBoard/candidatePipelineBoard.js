@@ -1,7 +1,7 @@
-import { LightningElement, wire } from 'lwc';
-import { refreshApex } from '@salesforce/apex';
+import { LightningElement, track } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
-import { subscribe, unsubscribe, onError } from 'lightning/empApi';
+import { NavigationMixin } from 'lightning/navigation';
+import { subscribe, onError } from 'lightning/empApi';
 import getPipelineBoard from '@salesforce/apex/RecruitmentLwcController.getPipelineBoard';
 import updateApplicationStatus from '@salesforce/apex/RecruitmentLwcController.updateApplicationStatus';
 import getFilterOptions from '@salesforce/apex/RecruitmentLwcController.getFilterOptions';
@@ -9,15 +9,15 @@ import bulkUpdateApplications from '@salesforce/apex/RecruitmentLwcController.bu
 
 const PIPELINE_CHANNEL = '/event/Application_Pipeline_Update__e';
 
-export default class CandidatePipelineBoard extends LightningElement {
+export default class CandidatePipelineBoard extends NavigationMixin(LightningElement) {
     searchTerm = '';
     draggedApplicationId;
-    wiredBoard;
     stages = [];
     isBusy = false;
     errorMessage;
     subscription;
-    
+    isDraggingSelected = false; // флаг, что перетаскивается выделенная карточка
+
     // Filters
     showFilters = false;
     departmentFilter = '';
@@ -44,7 +44,7 @@ export default class CandidatePipelineBoard extends LightningElement {
     ];
 
     connectedCallback() {
-        onError(() => {});
+        onError(() => { });
         this.subscribeToPipelineUpdates();
         this.loadFilterOptions();
         this.refreshBoard();
@@ -54,35 +54,17 @@ export default class CandidatePipelineBoard extends LightningElement {
         try {
             this.isBusy = true;
             const result = await getPipelineBoard();
-            console.log('Pipeline board data received:', result);
-            console.log('Type:', typeof result);
-            console.log('Is Array:', Array.isArray(result));
-            
             if (Array.isArray(result) && result.length > 0) {
-                console.log('Data is valid array with ' + result.length + ' stages');
                 this.stages = result;
             } else {
-                console.warn('Data is empty or invalid, using defaults');
                 this.stages = this.getDefaultStages();
             }
             this.errorMessage = undefined;
         } catch (error) {
-            console.error('Error loading board:', error);
             this.errorMessage = 'Error loading pipeline: ' + this.reduceError(error);
             this.stages = this.getDefaultStages();
         } finally {
             this.isBusy = false;
-        }
-    }
-
-    handleRefresh() {
-        this.refreshBoard();
-        this.refreshApex();
-    }
-
-    refreshApex() {
-        if (this.wiredBoard) {
-            refreshApex(this.wiredBoard);
         }
     }
 
@@ -169,22 +151,90 @@ export default class CandidatePipelineBoard extends LightningElement {
         this.sortByScore = event.target.checked;
     }
 
-    handleCardSelect(event) {
-        const appId = event.currentTarget.dataset.id;
-        if (this.selectedApplicationIds.has(appId)) {
-            this.selectedApplicationIds.delete(appId);
-        } else {
-            this.selectedApplicationIds.add(appId);
+    // Обработка клика по карточке с учётом Ctrl
+    handleCardClick(event) {
+        // Если клик был по имени или позиции, не меняем выделение
+        if (event.target.classList.contains('clickable-name') || event.target.classList.contains('clickable-position')) {
+            return;
         }
-        this.template.querySelectorAll('article[data-id]').forEach((card) => {
-            const isSelected = this.selectedApplicationIds.has(card.dataset.id);
-            card.classList.toggle('application-card_selected', isSelected);
-        });
+
+        const appId = event.currentTarget.dataset.id;
+        const isCtrlPressed = event.ctrlKey || event.metaKey;
+
+        if (isCtrlPressed) {
+            if (this.selectedApplicationIds.has(appId)) {
+                this.selectedApplicationIds.delete(appId);
+            } else {
+                this.selectedApplicationIds.add(appId);
+            }
+        } else {
+            if (this.selectedApplicationIds.size === 1 && this.selectedApplicationIds.has(appId)) {
+                this.selectedApplicationIds.clear();
+            } else {
+                this.selectedApplicationIds.clear();
+                this.selectedApplicationIds.add(appId);
+            }
+        }
+        this.selectedApplicationIds = new Set(this.selectedApplicationIds);
     }
 
+    // Открытие записи кандидата
+    handleCandidateNameClick(event) {
+        event.stopPropagation();
+        const candidateId = event.currentTarget.dataset.candidateId;
+        if (candidateId) {
+            this[NavigationMixin.Navigate]({
+                type: 'standard__recordPage',
+                attributes: {
+                    recordId: candidateId,
+                    objectApiName: 'Contact', // замените на свой API name
+                    actionName: 'view'
+                }
+            });
+        }
+    }
+
+    // Открытие записи позиции
+    handlePositionNameClick(event) {
+        event.stopPropagation();
+        const positionId = event.currentTarget.dataset.positionId;
+        if (positionId) {
+            this[NavigationMixin.Navigate]({
+                type: 'standard__recordPage',
+                attributes: {
+                    recordId: positionId,
+                    objectApiName: 'Job_Opening__c', // замените на свой API name
+                    actionName: 'view'
+                }
+            });
+        }
+    }
+
+    // Drag & Drop с поддержкой множественного выделения
     handleDragStart(event) {
-        this.draggedApplicationId = event.currentTarget.dataset.id;
+        const appId = event.currentTarget.dataset.id;
+        this.draggedApplicationId = appId;
+        this.isDraggingSelected = this.selectedApplicationIds.has(appId);
         event.dataTransfer.effectAllowed = 'move';
+        event.currentTarget.classList.add('dragging');
+
+        // Создаём "призрачную" копию для визуального отклика
+        const rect = event.currentTarget.getBoundingClientRect();
+        const ghost = event.currentTarget.cloneNode(true);
+        ghost.style.position = 'absolute';
+        ghost.style.top = '-1000px';
+        ghost.style.left = '-1000px';
+        ghost.style.width = `${rect.width}px`;
+        ghost.style.opacity = '0.6';
+        document.body.appendChild(ghost);
+        event.dataTransfer.setDragImage(ghost, rect.width / 2, rect.height / 2);
+        setTimeout(() => document.body.removeChild(ghost), 0);
+    }
+
+    handleDragEnd(event) {
+        event.currentTarget.classList.remove('dragging');
+        this.draggedApplicationId = undefined;
+        this.isDraggingSelected = false;
     }
 
     handleDragOver(event) {
@@ -192,36 +242,65 @@ export default class CandidatePipelineBoard extends LightningElement {
         event.dataTransfer.dropEffect = 'move';
     }
 
+    handleDropOnCard(event) {
+        event.preventDefault(); // Предотвращаем вложение карточки в карточку
+    }
+
     async handleDrop(event) {
         event.preventDefault();
-        const status = event.currentTarget.dataset.status;
-        if (!this.draggedApplicationId || !status) {
+        const targetStatus = event.currentTarget.dataset.status;
+        if (!this.draggedApplicationId || !targetStatus) {
             return;
         }
 
+        let applicationIdsToMove = [];
+        if (this.isDraggingSelected && this.selectedApplicationIds.size > 1) {
+            // Перетаскиваем все выделенные карточки
+            applicationIdsToMove = Array.from(this.selectedApplicationIds);
+        } else {
+            applicationIdsToMove = [this.draggedApplicationId];
+        }
+
         this.isBusy = true;
+        let successCount = 0;
+        let errorCount = 0;
+
         try {
-            await updateApplicationStatus({
-                applicationId: this.draggedApplicationId,
-                newStatus: status
-            });
-            await refreshApex(this.wiredBoard);
-            this.showToast('Pipeline updated', `Application moved to ${status}.`, 'success');
+            // Последовательно обновляем каждую заявку
+            for (const appId of applicationIdsToMove) {
+                try {
+                    await updateApplicationStatus({
+                        applicationId: appId,
+                        newStatus: targetStatus
+                    });
+                    successCount++;
+                } catch (err) {
+                    errorCount++;
+                    console.error(`Failed to move ${appId}:`, err);
+                }
+            }
+            await this.refreshBoard();
+            // После переноса нескольких карточек снимаем выделение
+            if (applicationIdsToMove.length > 1) {
+                this.selectedApplicationIds.clear();
+                this.selectedApplicationIds = new Set();
+            }
+            this.showToast(
+                'Pipeline updated',
+                `${successCount} application(s) moved to ${targetStatus}${errorCount > 0 ? `, ${errorCount} failed` : ''}.`,
+                errorCount > 0 ? 'warning' : 'success'
+            );
         } catch (error) {
             this.showToast('Could not update pipeline', this.reduceError(error), 'error');
         } finally {
             this.isBusy = false;
             this.draggedApplicationId = undefined;
+            this.isDraggingSelected = false;
         }
     }
 
-    async handleRefresh() {
-        this.isBusy = true;
-        try {
-            await refreshApex(this.wiredBoard);
-        } finally {
-            this.isBusy = false;
-        }
+    handleRefresh() {
+        this.refreshBoard();
     }
 
     handleMassReject() {
@@ -251,8 +330,9 @@ export default class CandidatePipelineBoard extends LightningElement {
                 applicationIds: Array.from(this.selectedApplicationIds),
                 action: this.bulkAction
             });
-            await refreshApex(this.wiredBoard);
+            await this.refreshBoard();
             this.selectedApplicationIds.clear();
+            this.selectedApplicationIds = new Set();
             this.showToast(
                 'Bulk action completed',
                 `${count} applications ${this.bulkAction === 'reject' ? 'rejected' : 'advanced'}.`,
@@ -273,9 +353,7 @@ export default class CandidatePipelineBoard extends LightningElement {
     async subscribeToPipelineUpdates() {
         try {
             this.subscription = await subscribe(PIPELINE_CHANNEL, -1, async () => {
-                if (this.wiredBoard) {
-                    await refreshApex(this.wiredBoard);
-                }
+                await this.refreshBoard();
             });
         } catch (error) {
             this.subscription = undefined;
@@ -285,62 +363,54 @@ export default class CandidatePipelineBoard extends LightningElement {
     decorateApplication(app) {
         const score = app.matchScore === null || app.matchScore === undefined ? null : Math.round(app.matchScore);
         let scoreClass = '';
+        let matchLabel = 'No score';
         if (score !== null) {
-            scoreClass = score >= 80 ? 'score-high' : score >= 60 ? 'score-medium' : 'score-low';
+            matchLabel = `${score}%`;
+            scoreClass = score >= 80 ? 'slds-badge slds-theme_success' :
+                score >= 60 ? 'slds-badge slds-theme_warning' :
+                    'slds-badge slds-theme_error';
+        } else {
+            scoreClass = 'slds-badge';
         }
+
+        const isSelected = this.selectedApplicationIds.has(app.id);
+        const baseCardClass = 'slds-card slds-card_boundary slds-p-around_x-small card-draggable';
+        const breachedClass = app.slaBreached ? 'card-breached' : '';
+        const selectedClass = isSelected ? 'card-selected' : '';
+
         return {
             ...app,
             candidateName: app.candidateName || 'Unnamed candidate',
             positionName: app.positionName || 'No position',
-            matchLabel: score === null ? 'No score' : `${score}%`,
+            matchLabel,
             scoreClass,
             daysLabel: app.daysInStage ? `${app.daysInStage}d in stage` : 'New stage',
             priorityLabel: app.priority ? `${app.priority} priority` : 'Normal priority',
-            cardClass: app.slaBreached ? 'application-card application-card_breached' : 'application-card',
-            isSelected: this.selectedApplicationIds.has(app.id)
+            cardClass: `${baseCardClass} ${breachedClass} ${selectedClass}`,
+            isSelected
         };
     }
 
     matchesSearch(app, term) {
-        if (!term) {
-            return true;
-        }
+        if (!term) return true;
         return [app.candidateName, app.positionName, app.status, app.priority]
             .filter(Boolean)
             .some((value) => value.toLowerCase().includes(term));
     }
 
     matchesFilters(app) {
-        // Department filter
-        if (this.departmentFilter && app.department !== this.departmentFilter) {
-            return false;
-        }
-        // Recruiter filter
-        if (this.recruiterFilter && app.recruiter !== this.recruiterFilter) {
-            return false;
-        }
-        // Position filter
-        if (this.positionFilter && app.positionName !== this.positionFilter) {
-            return false;
-        }
-        // Date range filter
-        if (this.dateFromFilter && app.appliedDate < this.dateFromFilter) {
-            return false;
-        }
-        if (this.dateToFilter && app.appliedDate > this.dateToFilter) {
-            return false;
-        }
-        // SLA Status filter
-        if (this.slaStatusFilter === 'Breached' && !app.slaBreached) {
-            return false;
-        }
-        if (this.slaStatusFilter === 'At Risk' && (!app.slaAtRisk || app.slaBreached)) {
-            return false;
-        }
-        // Top Matches filter
-        if (this.showTopMatches && (app.matchScore === null || app.matchScore < 70)) {
-            return false;
-        }
+        if (this.departmentFilter && app.department !== this.departmentFilter) return false;
+        if (this.recruiterFilter && app.recruiter !== this.recruiterFilter) return false;
+        if (this.positionFilter && app.positionName !== this.positionFilter) return false;
+
+        if (this.dateFromFilter && app.appliedDate && app.appliedDate < this.dateFromFilter) return false;
+        if (this.dateToFilter && app.appliedDate && app.appliedDate > this.dateToFilter) return false;
+
+        if (this.slaStatusFilter === 'Breached' && !app.slaBreached) return false;
+        if (this.slaStatusFilter === 'At Risk' && (!app.slaAtRisk || app.slaBreached)) return false;
+
+        if (this.showTopMatches && (app.matchScore === null || app.matchScore < 70)) return false;
+
         return true;
     }
 
@@ -353,5 +423,13 @@ export default class CandidatePipelineBoard extends LightningElement {
             return error.body.map((item) => item.message).join(', ');
         }
         return error?.body?.message || error?.message || 'Unexpected error';
+    }
+
+
+    handleDragEnter(event) {
+        event.currentTarget.classList.add('drag-over');
+    }
+    handleDragLeave(event) {
+        event.currentTarget.classList.remove('drag-over');
     }
 }

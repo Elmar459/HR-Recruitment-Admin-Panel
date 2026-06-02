@@ -1,0 +1,23 @@
+<template>
+    <lightning-card title="Candidate Statistics" icon-name="standard:people">
+        <div class="slds-p-around_medium">
+            <template if:false={hasRecordId}>
+                <div class="slds-text-color_error slds-m-bottom_medium">
+                    Please provide a Position ID. If you are on a Position record page, ensure the component is placed correctly.
+                </div>
+            </template>
+            <template if:true={hasRecordId}>
+                <lightning-datatable
+                    key-field="id"
+                    data={candidates}
+                    columns={columns}
+                    hide-checkbox-column="true"
+                    show-row-number-column="true"
+                ></lightning-datatable>
+            </template>
+            <template if:true={error}>
+                <div class="slds-text-color_error slds-m-top_medium">{error}</div>
+            </template>
+        </div>
+    </lightning-card>
+</template>

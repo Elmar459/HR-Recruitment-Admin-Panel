@@ -1,0 +1,7 @@
+.slds-table th {
+    vertical-align: middle;
+}
+.slds-badge {
+    width: fit-content;
+    margin: 0 auto;
+}

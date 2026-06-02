@@ -1,206 +1,274 @@
-.toolbar {
-    display: grid;
-    grid-template-columns: minmax(12rem, 24rem) auto;
-    gap: 0.75rem;
-    align-items: end;
+:host {
+    display: block;
+    --primary-color: #2c7da0;
+    --primary-dark: #1f5e7a;
+    --primary-light: #e9f4f8;
+    --accent-success: #2e7d32;
+    --accent-warning: #ed6c02;
+    --accent-error: #d32f2f;
+    --gray-light: #f8f9fa;
+    --gray-border: #e2e8f0;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.12);
+    --transition-default: all 0.2s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+    --transition-drag: transform 0.15s ease, box-shadow 0.2s ease, background 0.1s ease;
 }
 
-.toolbar-actions {
-    display: flex;
-    gap: 0.5rem;
+/* Увеличиваем ширину колонок, чтобы карточки не выпирали */
+.stage-column {
+    min-width: 320px;
+    width: 320px;
+    max-width: 320px;
+    transition: var(--transition-default);
+    animation: fadeSlideUp 0.3s ease-out;
+    box-sizing: border-box;
 }
 
-.board {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(16rem, 1fr);
-    gap: 0.75rem;
-    overflow-x: auto;
+/* Анимация появления колонок */
+@keyframes fadeSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
-.stage {
-    min-height: 24rem;
-    border: 1px solid var(--slds-g-color-border-base-1, #dddbda);
-    border-radius: 0.25rem;
-    background: var(--slds-g-color-neutral-base-95, #f3f3f3);
-}
-
-.stage__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem;
-    border-bottom: 1px solid var(--slds-g-color-border-base-1, #dddbda);
-}
-
-.stage__header h3 {
-    margin: 0;
-    font-size: 0.875rem;
-    font-weight: 700;
-}
-
-.stage__header span {
-    min-width: 1.5rem;
-    text-align: center;
-    border-radius: 999px;
-    background: #0176d3;
-    color: #fff;
-    font-size: 0.75rem;
-    line-height: 1.5rem;
-}
-
-.stage__body {
-    display: grid;
-    gap: 0.75rem;
-    padding: 0.75rem;
-}
-
-.application-card {
-    padding: 0.75rem;
-    border: 1px solid var(--slds-g-color-border-base-1, #dddbda);
-    border-left: 0.25rem solid #0176d3;
-    border-radius: 0.25rem;
-    background: #fff;
+/* Карточка кандидата – компактная, строго внутри колонки */
+.card-draggable {
     cursor: grab;
-}
-
-.application-card_breached {
-    border-left-color: #ba0517;
-}
-
-.card__topline,
-.card__meta {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.5rem;
-}
-
-.card__topline span {
-    font-weight: 700;
-    color: #0176d3;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.2rem;
-}
-
-.score-high {
-    background: #04844b;
-    color: #fff;
-}
-
-.score-medium {
-    background: #ffc100;
-    color: #000;
-}
-
-.score-low {
-    background: #ba0517;
-    color: #fff;
-}
-
-.sla-icon {
-    display: inline-block;
-    margin-left: 0.25rem;
-    vertical-align: middle;
-}
-
-.filters {
-    background: #f9f9f9;
-    border-bottom: 1px solid var(--slds-g-color-border-base-1, #dddbda);
-}
-
-.filter-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
-}
-
-.filter-toggles {
-    display: flex;
-    gap: 1.5rem;
-}
-
-.bulk-actions {
-    display: flex;
-    gap: 0.75rem;
-    align-items: center;
-    background: #f3f3f3;
-    border-bottom: 1px solid var(--slds-g-color-border-base-1, #dddbda);
-}
-
-.selection-count {
-    font-size: 0.875rem;
-    color: var(--slds-g-color-neutral-base-40, #5c5c5c);
-    margin-left: 1rem;
-}
-
-.application-card_selected {
-    outline: 3px solid #0176d3;
-    outline-offset: -2px;
-}
-
-.modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
+    transition: var(--transition-drag);
+    margin-bottom: 0.6rem;
+    background: white;
+    border-radius: 10px;
+    border: 1px solid var(--gray-border);
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.8rem;
+    box-sizing: border-box;
     width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
+    max-width: 100%;
 }
 
-.modal {
-    background: #fff;
-    border-radius: 0.25rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    max-width: 30rem;
-    width: 90%;
+/* Все внутренние блоки – без переполнения */
+.card-draggable .slds-grid,
+.card-draggable .slds-grid_align-spread {
+    gap: 0.3rem;
+    margin-bottom: 0.25rem;
+    flex-wrap: nowrap;
+    width: 100%;
 }
 
-.modal-header {
-    padding: 1rem;
-    border-bottom: 1px solid var(--slds-g-color-border-base-1, #dddbda);
+.card-draggable strong {
+    font-size: 0.85rem;
+    max-width: 160px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
 }
 
-.modal-header h2 {
-    margin: 0;
-    font-size: 1.25rem;
+.card-draggable .slds-text-body_small {
+    font-size: 0.7rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
 }
 
-.modal-body {
-    padding: 1rem;
+.card-draggable:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-color);
 }
 
-.modal-body p {
-    margin: 0;
-    color: var(--slds-g-color-neutral-base-40, #5c5c5c);
+.card-draggable:active {
+    cursor: grabbing;
 }
 
-.modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.75rem;
-    padding: 1rem;
-    border-top: 1px solid var(--slds-g-color-border-base-1, #dddbda);
-    background: #f3f3f3;
+/* Состояние при перетаскивании – затемнение, без прозрачности, лёгкое увеличение */
+.card-draggable.dragging {
+    cursor: grabbing;
+    background: rgba(0, 0, 0, 0.05);
+    transform: scale(1.02) rotate(0.5deg);
+    box-shadow: var(--shadow-lg);
+    transition: transform 0.12s cubic-bezier(0.2, 0.9, 0.4, 1.1), box-shadow 0.2s;
 }
 
-.application-card p {
-    margin: 0.35rem 0 0.65rem;
+/* Стиль для просроченного SLA – левая полоса */
+.card-breached {
+    border-left: 4px solid var(--accent-error);
+    background: linear-gradient(to right, rgba(211, 47, 47, 0.02), white);
 }
 
-.card__meta,
-.empty {
-    color: var(--slds-g-color-neutral-base-40, #5c5c5c);
+/* Стиль для выбранной карточки */
+.card-selected {
+    outline: none;
+    border: 1px solid var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(44, 125, 160, 0.2);
+    background-color: var(--primary-light);
+}
+
+/* Кликабельные элементы */
+.clickable-name, .clickable-position {
+    cursor: pointer;
+    transition: color 0.15s ease;
+    max-width: 160px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+}
+
+.clickable-name:hover, .clickable-position:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+/* Бейджи скора – компактные */
+.slds-badge {
+    border-radius: 30px;
+    font-weight: 500;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.7rem;
+    transition: var(--transition-default);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.slds-badge.slds-theme_success {
+    background: linear-gradient(135deg, #2e7d32, #1b5e20);
+    color: white;
+}
+
+.slds-badge.slds-theme_warning {
+    background: linear-gradient(135deg, #ed6c02, #e65100);
+    color: white;
+}
+
+.slds-badge.slds-theme_error {
+    background: linear-gradient(135deg, #d32f2f, #b71c1c);
+    color: white;
+}
+
+/* Заголовки колонок */
+.slds-card__header {
+    background: linear-gradient(to bottom, #ffffff, var(--gray-light));
+    border-bottom: 2px solid var(--primary-color);
+    border-radius: 10px 10px 0 0;
+    padding: 0.6rem 0.8rem;
+}
+
+.slds-text-heading_small {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--primary-dark);
+}
+
+/* Тело карточки (контейнер колонки) */
+.slds-card__body {
+    min-height: 250px;
+    padding: 0.5rem 0.25rem;
+    background: var(--gray-light);
+    border-radius: 0 0 10px 10px;
+    transition: background 0.2s ease;
+    overflow-x: hidden;
+}
+
+/* Подсветка колонки при наведении перетаскиваемого элемента */
+.stage-column.drag-over .slds-card__body {
+    background: rgba(44, 125, 160, 0.08);
+    border: 1px dashed var(--primary-color);
+}
+
+/* Пустая область */
+.slds-align_absolute-center {
+    font-style: italic;
+    background: rgba(0,0,0,0.01);
+    border-radius: 8px;
+    margin: 0.5rem;
+    padding: 0.75rem;
     font-size: 0.75rem;
 }
 
-.empty {
-    padding: 1rem;
-    text-align: center;
-    border: 1px dashed var(--slds-g-color-border-base-1, #dddbda);
-    border-radius: 0.25rem;
+/* Скроллбар */
+.slds-scrollable_x::-webkit-scrollbar {
+    height: 6px;
+}
+.slds-scrollable_x::-webkit-scrollbar-track {
+    background: var(--gray-border);
+    border-radius: 10px;
+}
+.slds-scrollable_x::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 10px;
+}
+.slds-scrollable_x::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-dark);
+}
+
+/* Анимация для модального окна */
+.slds-backdrop_open {
+    animation: fadeIn 0.2s ease-out;
+}
+
+.slds-modal__container {
+    animation: slideUp 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Спиннер */
+.slds-is-relative {
+    position: relative;
+    min-height: 200px;
+}
+
+/* Плавное появление карточек при фильтрации */
+.card-draggable {
+    animation: cardFade 0.2s ease-out;
+}
+
+@keyframes cardFade {
+    from {
+        opacity: 0;
+        transform: scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Иконка SLA с анимацией */
+lightning-icon[icon-name="utility:clock"] {
+    --sds-c-icon-color-foreground: var(--accent-error);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+}
+lightning-icon[icon-name="utility:clock"]:hover {
+    transform: rotate(15deg) scale(1.1);
 }

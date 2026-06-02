@@ -47,24 +47,20 @@ public with sharing class RecruitmentLwcController {
             throw new AuraHandledException('Application and status are required.');
         }
 
-        Application__c current = [
-            SELECT Id, Status__c
-            FROM Application__c
-            WHERE Id = :applicationId
-            LIMIT 1
-        ];
-        if (!StatusTransitionValidator.validate(current.Status__c, newStatus)) {
-            throw new AuraHandledException(
-                'Invalid status transition from ' + current.Status__c + ' to ' + newStatus + '.'
-            );
-        }
-
         SObject app = Schema.getGlobalDescribe().get(APPLICATION_OBJECT).newSObject(applicationId);
         app.put('Status__c', newStatus);
         if (fieldExists(APPLICATION_OBJECT, 'Last_Stage_Change_Date__c')) {
             app.put('Last_Stage_Change_Date__c', Date.today());
         }
-        update app;
+        
+        Database.SaveResult result = Database.update(app, false);
+        if (!result.isSuccess()) {
+            String errorMsg = '';
+            for (Database.Error err : result.getErrors()) {
+                errorMsg += err.getMessage() + ' ';
+            }
+            throw new AuraHandledException('Update failed: ' + errorMsg);
+        }
 
         NotificationService.sendStatusUpdate(applicationId, newStatus);
         publishPipelineEvent(applicationId, newStatus);
@@ -79,7 +75,6 @@ public with sharing class RecruitmentLwcController {
 
         SObject app = Database.query(buildApplicationDetailQuery(applicationId));
         payload.application = toApplicationSummary(app);
-        payload.statusOptions = getStatusOptions(payload.application.status);
 
         if (objectExists(INTERVIEW_OBJECT)) {
             for (SObject interview : Database.query(buildInterviewQuery(applicationId))) {
@@ -87,10 +82,74 @@ public with sharing class RecruitmentLwcController {
             }
         }
 
-        payload.stages = buildStageItems(payload.interviews, payload.application.status);
+        payload.stages = buildStageItemsWithRules(payload.interviews);
         payload.scoreTrend = buildScoreTrend(payload.stages);
         payload.matchDetails = buildMatchDetails(applicationId, app);
+        
         return payload;
+    }
+
+    private static List<StageItem> buildStageItemsWithRules(List<InterviewItem> interviews) {
+        List<String> stageTypes = new List<String>{'Phone Screen', 'Technical', 'HR/Behavioral', 'Cultural Fit', 'Final/Executive'};
+        List<StageItem> stages = new List<StageItem>();
+        Map<String, InterviewItem> interviewMap = new Map<String, InterviewItem>();
+        for (InterviewItem iv : interviews) {
+            interviewMap.put(iv.type, iv);
+        }
+
+        Boolean phoneCompleted = isStageCompleted(interviewMap, 'Phone Screen');
+        Boolean techCompleted = isStageCompleted(interviewMap, 'Technical');
+        Boolean hrCompleted = isStageCompleted(interviewMap, 'HR/Behavioral');
+        Boolean cultureCompleted = isStageCompleted(interviewMap, 'Cultural Fit');
+
+        for (Integer i = 0; i < stageTypes.size(); i++) {
+            String type = stageTypes[i];
+            InterviewItem iv = interviewMap.get(type);
+            StageItem stage = new StageItem();
+            stage.numberValue = i + 1;
+            stage.type = type;
+            stage.interview = iv;
+
+            if (i == 0) {
+                stage.state = phoneCompleted ? 'completed' : (iv != null ? 'active' : 'available');
+            } 
+            else if (i >= 1 && i <= 3) {
+                if (!phoneCompleted) {
+                    stage.state = 'pending';
+                } else if (iv != null && iv.status == 'Completed') {
+                    stage.state = 'completed';
+                } else {
+                    stage.state = 'available';
+                }
+            } 
+            else if (i == 4) {
+                if ((techCompleted && hrCompleted && cultureCompleted) || (iv != null && iv.status != 'Cancelled')) {
+                    stage.state = (iv != null && iv.status == 'Completed') ? 'completed' : 'available';
+                } else {
+                    stage.state = 'pending';
+                }
+            }
+
+            if (iv != null) {
+                stage.status = iv.status;
+                stage.dateTimeValue = iv.dateTimeValue;
+                stage.score = iv.score;
+                if (iv.status == 'Completed') {
+                    stage.state = 'completed';
+                } else if (iv.status == 'Cancelled' || iv.status == 'No Show') {
+                    stage.state = 'rejected';
+                }
+            } else {
+                stage.status = (stage.state == 'pending' ? 'Pending' : (stage.state == 'available' ? 'Available' : 'Active'));
+            }
+            stages.add(stage);
+        }
+        return stages;
+    }
+
+    private static Boolean isStageCompleted(Map<String, InterviewItem> interviewMap, String type) {
+        InterviewItem iv = interviewMap.get(type);
+        return iv != null && iv.status == 'Completed';
     }
 
     @AuraEnabled
@@ -115,139 +174,206 @@ public with sharing class RecruitmentLwcController {
         return InterviewService.scheduleInterview(applicationId, UserInfo.getUserId(), startTime, nextType);
     }
 
-    @AuraEnabled(cacheable=true)
-    public static List<MessageItem> getMessages(Id applicationId) {
-        List<MessageItem> messages = new List<MessageItem>();
-        if (applicationId == null || !objectExists(MESSAGE_OBJECT) || !hasMessageLinkField()) {
-            return messages;
-        }
-
-        for (SObject message : Database.query(buildMessageQuery(applicationId))) {
-            messages.add(toMessageItem(message));
-        }
-        return messages;
-    }
-
     @AuraEnabled
-    public static MessageItem sendMessage(Id applicationId, String body, String channel) {
-        if (applicationId == null || String.isBlank(body)) {
-            throw new AuraHandledException('Application and message body are required.');
+    public static void finalizeApplication(Id applicationId, String decision, String rejectionReason) {
+        if (applicationId == null || String.isBlank(decision)) {
+            throw new AuraHandledException('Application ID and decision are required.');
         }
-
-        MessageItem item = new MessageItem();
-        item.applicationId = applicationId;
-        item.body = body.trim();
-        item.channel = normalizeMessageChannel(channel);
-        item.direction = 'Outbound';
-        item.createdDate = System.now();
-        item.createdByName = UserInfo.getName();
-        item.senderName = UserInfo.getName();
-        item.isRead = true;
-
-        if (objectExists(MESSAGE_OBJECT)) {
-            SObject message = Schema.getGlobalDescribe().get(MESSAGE_OBJECT).newSObject();
-            putIfPresent(message, 'Related_Record_Id__c', String.valueOf(applicationId));
-            putIfPresent(message, 'Application__c', applicationId);
-            putIfPresent(message, 'Body__c', item.body);
-            putIfPresent(message, 'Subject__c', 'Recruitment message');
-            putIfPresent(message, 'Direction__c', item.direction);
-            putIfPresent(message, 'Channel__c', item.channel);
-            putIfPresent(message, 'Sender__c', UserInfo.getUserId());
-            putIfPresent(message, 'Sent_At__c', item.createdDate);
-            putIfPresent(message, 'Is_Read__c', true);
-            putIfPresent(message, 'Status__c', 'Sent');
-            insert message;
-            item.id = (Id) message.get('Id');
+        
+        Application__c app = [SELECT Id, Status__c FROM Application__c WHERE Id = :applicationId LIMIT 1];
+        
+        String newStatus;
+        if (decision == 'Hire') {
+            newStatus = 'Hired';
+        } else if (decision == 'Reject') {
+            newStatus = 'Rejected';
+        } else if (decision == 'Withdrawn') {
+            newStatus = 'Withdrawn';
+        } else {
+            throw new AuraHandledException('Invalid decision. Must be Hire, Reject, or Withdrawn.');
         }
-
-        publishMessageEvent(item);
-        NotificationService.sendStatusUpdate(applicationId, 'Message sent via ' + item.channel);
-        return item;
+        
+        app.Status__c = newStatus;
+        
+        if (decision == 'Reject' && String.isNotBlank(rejectionReason)) {
+            if (fieldExists(APPLICATION_OBJECT, 'Rejection_Reason__c')) {
+                app.Rejection_Reason__c = rejectionReason;
+            }
+        }
+        
+        Database.SaveResult result = Database.update(app, false);
+        if (!result.isSuccess()) {
+            String errorMsg = '';
+            for (Database.Error err : result.getErrors()) {
+                errorMsg += err.getMessage() + ' ';
+            }
+            throw new AuraHandledException('Update failed: ' + errorMsg);
+        }
+        
+        publishPipelineEvent(applicationId, newStatus);
     }
 
-    @AuraEnabled(cacheable=true)
-    public static List<ChatterItem> getChatterPosts(Id applicationId) {
-        List<ChatterItem> posts = new List<ChatterItem>();
-        if (applicationId == null) {
-            return posts;
-        }
-        for (FeedItem item : [
-            SELECT Id, Body, CreatedDate, CreatedBy.Name
-            FROM FeedItem
-            WHERE ParentId = :applicationId
-            ORDER BY CreatedDate DESC
-            LIMIT 20
-        ]) {
-            ChatterItem post = new ChatterItem();
-            post.id = item.Id;
-            post.body = item.Body;
-            post.createdDate = item.CreatedDate;
-            post.createdByName = item.CreatedBy.Name;
-            posts.add(post);
-        }
-        return posts;
-    }
-
+    // ИСПРАВЛЕННЫЙ МЕТОД МАССОВОГО ПЕРЕМЕЩЕНИЯ
     @AuraEnabled
-    public static ChatterItem postToChatter(Id applicationId, String body) {
-        if (applicationId == null || String.isBlank(body)) {
-            throw new AuraHandledException('Application and Chatter body are required.');
+    public static void bulkUpdateApplications(List<Id> applicationIds, String action) {
+        if (applicationIds == null || applicationIds.isEmpty() || String.isBlank(action)) {
+            throw new AuraHandledException('Applications and action are required.');
         }
-        FeedItem post = new FeedItem(
-            ParentId = applicationId,
-            Body = body.trim()
-        );
-        insert post;
 
-        post = [
-            SELECT Id, Body, CreatedDate, CreatedBy.Name
-            FROM FeedItem
-            WHERE Id = :post.Id
-            LIMIT 1
+        List<Application__c> appsToUpdate = new List<Application__c>();
+        String targetStatus;
+        
+        if (action.equalsIgnoreCase('reject')) {
+            targetStatus = 'Rejected';
+        } else if (action.equalsIgnoreCase('advance')) {
+            targetStatus = 'HR/Behavioral'; // следующий этап после New? Но лучше определять динамически.
+            // Для динамики можно добавить логику, но для простоты оставляем HR/Behavioral
+        } else {
+            throw new AuraHandledException('Invalid action. Use "reject" or "advance".');
+        }
+
+        List<Application__c> existingApps = [
+            SELECT Id, Status__c
+            FROM Application__c
+            WHERE Id IN :applicationIds
         ];
 
-        ChatterItem item = new ChatterItem();
-        item.id = post.Id;
-        item.body = post.Body;
-        item.createdDate = post.CreatedDate;
-        item.createdByName = post.CreatedBy.Name;
-        return item;
-    }
+        Set<String> finalStatuses = new Set<String>{'Hired', 'Rejected', 'Withdrawn'};
+        for (Application__c app : existingApps) {
+            if (finalStatuses.contains(app.Status__c)) {
+                continue;
+            }
+            app.Status__c = targetStatus;
+            if (fieldExists(APPLICATION_OBJECT, 'Last_Stage_Change_Date__c')) {
+                app.Last_Stage_Change_Date__c = Date.today();
+            }
+            appsToUpdate.add(app);
+        }
 
-    @AuraEnabled
-    public static Integer markAllMessagesRead(Id applicationId) {
-        if (applicationId == null || !objectExists(MESSAGE_OBJECT) || !fieldExists(MESSAGE_OBJECT, 'Is_Read__c')) {
-            return 0;
-        }
-        List<SObject> unread = Database.query(
-            'SELECT Id, Is_Read__c FROM Message__c WHERE Application__c = \'' +
-            String.escapeSingleQuotes(String.valueOf(applicationId)) + '\' AND Is_Read__c = false'
-        );
-        for (SObject message : unread) {
-            message.put('Is_Read__c', true);
-        }
-        if (!unread.isEmpty()) {
-            update unread;
-        }
-        return unread.size();
-    }
-
-    @AuraEnabled
-    public static void publishTypingIndicator(Id applicationId, Boolean isTyping) {
-        if (applicationId == null || !objectExists(MESSAGE_EVENT)) {
+        if (appsToUpdate.isEmpty()) {
+            System.debug('No applications to update (all in final status).');
             return;
         }
-        SObject eventRecord = Schema.getGlobalDescribe().get(MESSAGE_EVENT).newSObject();
-        putIfPresent(eventRecord, 'Application_Id__c', String.valueOf(applicationId));
-        putIfPresent(eventRecord, 'Direction__c', 'Outbound');
-        putIfPresent(eventRecord, 'Sender_Name__c', UserInfo.getName());
-        putIfPresent(eventRecord, 'Is_Typing__c', isTyping == true);
-        EventBus.publish(eventRecord);
+
+        Database.SaveResult[] results = Database.update(appsToUpdate, false);
+        Integer successCount = 0;
+        for (Database.SaveResult sr : results) {
+            if (sr.isSuccess()) successCount++;
+        }
+        // Ничего не бросаем, просто выводим debug
+        System.debug(successCount + ' applications updated successfully.');
     }
 
+    @AuraEnabled
+    public static DateTime getNearestAvailableSlot(Id applicationId) {
+        if (applicationId == null) {
+            throw new AuraHandledException('Application ID is required.');
+        }
+
+        String stageType = getActiveInterviewStage(applicationId);
+        if (String.isBlank(stageType)) {
+            throw new AuraHandledException('No active interview stage found for this application.');
+        }
+
+        Id interviewerId = getDefaultInterviewerId(applicationId);
+        if (interviewerId == null) {
+            interviewerId = UserInfo.getUserId();
+        }
+
+        Datetime searchStart = System.now().addHours(2);
+        Datetime searchEnd = searchStart.addDays(30);
+        Set<Datetime> occupied = new Set<Datetime>();
+        for (Interview__c interview : [
+            SELECT Date_Time__c
+            FROM Interview__c
+            WHERE Interviewer__c = :interviewerId
+              AND Date_Time__c >= :searchStart
+              AND Date_Time__c <= :searchEnd
+              AND Status__c NOT IN ('Cancelled', 'No Show')
+        ]) {
+            if (interview.Date_Time__c != null) occupied.add(interview.Date_Time__c);
+        }
+
+        for (Integer dayOffset = 0; dayOffset < 30; dayOffset++) {
+            Date currentDate = searchStart.date().addDays(dayOffset);
+            if (isWeekend(currentDate)) continue;
+
+            for (Integer hour = 9; hour <= 17; hour++) {
+                Datetime slot = Datetime.newInstance(currentDate, Time.newInstance(hour, 0, 0, 0));
+                if (slot < searchStart) continue;
+                if (occupied.contains(slot)) continue;
+                return slot;
+            }
+        }
+        throw new AuraHandledException('No available interview slots found in the next 30 days.');
+    }
+
+    @AuraEnabled
+    public static void scheduleInterviewAtSlot(Id applicationId, DateTime selectedTime, String interviewType) {
+        if (applicationId == null || selectedTime == null || String.isBlank(interviewType)) {
+            throw new AuraHandledException('Application ID, time, and interview type are required.');
+        }
+
+        Id interviewerId = getDefaultInterviewerId(applicationId);
+        if (interviewerId == null) interviewerId = UserInfo.getUserId();
+
+        Interview__c newInterview = new Interview__c();
+        newInterview.Application__c = applicationId;
+        newInterview.Type__c = interviewType;
+        newInterview.Status__c = 'Scheduled';
+        newInterview.Date_Time__c = selectedTime;
+        newInterview.Interviewer__c = interviewerId;
+        insert newInterview;
+    }
+
+    private static String getActiveInterviewStage(Id applicationId) {
+        List<Interview__c> interviews = [
+            SELECT Type__c, Status__c
+            FROM Interview__c
+            WHERE Application__c = :applicationId
+            ORDER BY CreatedDate ASC
+        ];
+        Set<String> completedTypes = new Set<String>();
+        for (Interview__c iv : interviews) {
+            if (iv.Status__c == 'Completed') {
+                completedTypes.add(iv.Type__c);
+            }
+        }
+        List<String> allStages = new List<String>{ 'Phone Screen', 'Technical', 'HR/Behavioral', 'Cultural Fit', 'Final/Executive' };
+        for (String stage : allStages) {
+            if (!completedTypes.contains(stage)) {
+                return stage;
+            }
+        }
+        return null;
+    }
+
+    private static Id getDefaultInterviewerId(Id applicationId) {
+        try {
+            Application__c app = [
+                SELECT Recruiter__c
+                FROM Application__c
+                WHERE Id = :applicationId
+                LIMIT 1
+            ];
+            return app.Recruiter__c;
+        } catch (Exception e) {
+            return UserInfo.getUserId();
+        }
+    }
+
+    private static Boolean isWeekend(Date dt) {
+        DateTime dtTime = DateTime.newInstance(dt, Time.newInstance(0, 0, 0, 0));
+        String dayOfWeek = dtTime.format('E');
+        return dayOfWeek == 'Sat' || dayOfWeek == 'Sun';
+    }
+
+    // ================= ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ (без изменений) =================
     private static PipelineCard toPipelineCard(SObject app) {
         PipelineCard card = new PipelineCard();
         card.id = (Id) app.get('Id');
+        card.candidateId = (Id) getIfPresent(app, 'Candidate__c');
+        card.positionId = (Id) getIfPresent(app, 'Position__c');
         card.status = asString(getIfPresent(app, 'Status__c'));
         card.candidateName = relatedName(app, 'Candidate__r');
         card.positionName = relatedName(app, 'Position__r');
@@ -285,11 +411,10 @@ public with sharing class RecruitmentLwcController {
         item.dateTimeValue = (Datetime) getIfPresent(interview, 'Date_Time__c');
         item.score = asDecimal(getIfPresent(interview, 'Average_Interview_Score__c'));
         item.interviewerName = relatedName(interview, 'Interviewer__r');
-        item.recommendation = asString(getIfPresent(interview, 'Recommendation__c'));
         item.feedback = asString(getIfPresent(interview, 'Feedback_Summary__c'));
-        item.feedbackDetails = getFeedbackItem(item.id);
+        item.feedbacks = getFeedbackItems(item.id);   
         return item;
-    }
+}
 
     private static List<MatchDetail> buildMatchDetails(Id applicationId, SObject app) {
         List<MatchDetail> details = new List<MatchDetail>();
@@ -305,9 +430,7 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static void addDetail(List<MatchDetail> details, String label, Decimal value, Decimal weightedValue) {
-        if (value == null) {
-            return;
-        }
+        if (value == null) return;
         MatchDetail detail = new MatchDetail();
         detail.label = label;
         detail.value = value;
@@ -315,92 +438,45 @@ public with sharing class RecruitmentLwcController {
         details.add(detail);
     }
 
-    private static List<StageItem> buildStageItems(List<InterviewItem> interviews, String applicationStatus) {
-        List<String> stageTypes = new List<String>{ 'Phone Screen', 'Technical', 'HR/Behavioral', 'Cultural Fit', 'Final/Executive' };
-        List<StageItem> stages = new List<StageItem>();
-        Integer activeIndex = activeStageIndex(applicationStatus, interviews);
-
-        for (Integer i = 0; i < stageTypes.size(); i++) {
-            StageItem stage = new StageItem();
-            stage.numberValue = i + 1;
-            stage.type = stageTypes[i];
-            stage.state = i < activeIndex ? 'completed' : i == activeIndex ? 'active' : 'pending';
-            for (InterviewItem interview : interviews) {
-                if (interview.type != null && interview.type.contains(stage.type)) {
-                    stage.interview = interview;
-                    stage.status = interview.status;
-                    stage.dateTimeValue = interview.dateTimeValue;
-                    stage.score = interview.score;
-                    if (interview.status == 'Completed') {
-                        stage.state = 'completed';
-                    } else if (interview.status == 'Cancelled' || interview.status == 'No Show') {
-                        stage.state = 'rejected';
-                    }
-                    break;
-                }
-            }
-            if (stage.status == null) {
-                stage.status = stage.state == 'pending' ? 'Pending' : 'Active';
-            }
-            stages.add(stage);
-        }
-        return stages;
-    }
-
-    private static Integer activeStageIndex(String applicationStatus, List<InterviewItem> interviews) {
-        if (applicationStatus != null && applicationStatus.startsWith('Interview ')) {
-            String stageNumber = applicationStatus.replace('Interview ', '');
-            try {
-                return Math.max(0, Math.min(4, Integer.valueOf(stageNumber) - 1));
-            } catch (Exception e) {
-                return 0;
-            }
-        }
-        Integer completed = 0;
-        for (InterviewItem interview : interviews) {
-            if (interview.status == 'Completed') {
-                completed++;
-            }
-        }
-        return Math.max(0, Math.min(4, completed));
-    }
-
     private static List<ScoreTrendPoint> buildScoreTrend(List<StageItem> stages) {
-        List<ScoreTrendPoint> points = new List<ScoreTrendPoint>();
-        for (StageItem stage : stages) {
-            if (stage.state == 'completed' && stage.interview != null && stage.interview.feedbackDetails != null) {
-                ScoreTrendPoint point = new ScoreTrendPoint();
-                point.label = stage.type;
-                point.score = stage.interview.feedbackDetails.compositeScore != null
-                    ? stage.interview.feedbackDetails.compositeScore
-                    : stage.score;
-                points.add(point);
-            }
+    List<ScoreTrendPoint> points = new List<ScoreTrendPoint>();
+    for (StageItem stage : stages) {
+        if (stage.state == 'completed' && stage.interview != null && 
+            stage.interview.feedbacks != null && !stage.interview.feedbacks.isEmpty()) {
+            
+            FeedbackItem latest = stage.interview.feedbacks[0]; // первый после сортировки по убыванию даты
+            ScoreTrendPoint point = new ScoreTrendPoint();
+            point.label = stage.type;
+            point.score = latest.compositeScore != null ? latest.compositeScore : stage.score;
+            points.add(point);
         }
-        return points;
     }
+    return points;
+}
 
-    private static FeedbackItem getFeedbackItem(Id interviewId) {
-        if (interviewId == null || !objectExists(FEEDBACK_OBJECT)) {
-            return null;
+    private static List<FeedbackItem> getFeedbackItems(Id interviewId) {
+        List<FeedbackItem> result = new List<FeedbackItem>();
+        if (interviewId == null || !objectExists(FEEDBACK_OBJECT)) return result;
+        
+        String query = 'SELECT Id, Technical_Score__c, Communication_Score__c, Culture_Fit_Score__c, Composite_Score__c, ' +
+                    'Strengths__c, Weaknesses__c, Comments__c, CreatedDate ' +
+                    'FROM Interview_Feedback__c WHERE Interview__c = :interviewId ORDER BY CreatedDate DESC NULLS LAST';
+        
+        for (SObject fb : Database.query(query)) {
+            FeedbackItem item = new FeedbackItem();
+            item.id = (Id) fb.get('Id');
+            item.technicalScore = asDecimal(getIfPresent(fb, 'Technical_Score__c'));
+            item.communicationScore = asDecimal(getIfPresent(fb, 'Communication_Score__c'));
+            item.cultureFitScore = asDecimal(getIfPresent(fb, 'Culture_Fit_Score__c'));
+            item.compositeScore = asDecimal(getIfPresent(fb, 'Composite_Score__c'));
+            item.strengths = asString(getIfPresent(fb, 'Strengths__c'));
+            item.weaknesses = asString(getIfPresent(fb, 'Weaknesses__c'));
+            item.comments = asString(getIfPresent(fb, 'Comments__c'));
+            item.createdDate = (Datetime) getIfPresent(fb, 'CreatedDate');  // заменяем submittedAt
+            result.add(item);
         }
-        List<SObject> feedbackRecords = Database.query(buildFeedbackQuery(interviewId));
-        if (feedbackRecords.isEmpty()) {
-            return null;
-        }
-        SObject feedback = feedbackRecords[0];
-        FeedbackItem item = new FeedbackItem();
-        item.id = (Id) feedback.get('Id');
-        item.technicalScore = asDecimal(getIfPresent(feedback, 'Technical_Score__c'));
-        item.communicationScore = asDecimal(getIfPresent(feedback, 'Communication_Score__c'));
-        item.cultureFitScore = asDecimal(getIfPresent(feedback, 'Culture_Fit_Score__c'));
-        item.compositeScore = asDecimal(getIfPresent(feedback, 'Composite_Score__c'));
-        item.strengths = asString(getFirstPresent(feedback, new List<String>{ 'Strengths__c', 'Strength__c' }));
-        item.weaknesses = asString(getFirstPresent(feedback, new List<String>{ 'Weaknesses__c', 'Weakness__c' }));
-        item.comments = asString(getIfPresent(feedback, 'Comments__c'));
-        item.recommendation = asString(getIfPresent(feedback, 'Recommendation__c'));
-        return item;
-    }
+        return result;
+}
 
     private static MessageItem toMessageItem(SObject message) {
         MessageItem item = new MessageItem();
@@ -416,7 +492,7 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static String buildApplicationQuery() {
-        List<String> fields = new List<String>{ 'Id', 'Status__c' };
+        List<String> fields = new List<String>{ 'Id', 'Status__c', 'Candidate__c', 'Position__c' };
         addField(fields, APPLICATION_OBJECT, 'Applied_Date__c');
         addField(fields, APPLICATION_OBJECT, 'Match_Score__c');
         addField(fields, APPLICATION_OBJECT, 'Days_in_Stage__c');
@@ -453,7 +529,6 @@ public with sharing class RecruitmentLwcController {
         addField(fields, INTERVIEW_OBJECT, 'Status__c');
         addField(fields, INTERVIEW_OBJECT, 'Date_Time__c');
         addField(fields, INTERVIEW_OBJECT, 'Average_Interview_Score__c');
-        addField(fields, INTERVIEW_OBJECT, 'Recommendation__c');
         addField(fields, INTERVIEW_OBJECT, 'Feedback_Summary__c');
         fields.add('Interviewer__r.Name');
         return 'SELECT ' + String.join(fields, ',')
@@ -472,7 +547,6 @@ public with sharing class RecruitmentLwcController {
         addField(fields, FEEDBACK_OBJECT, 'Weaknesses__c');
         addField(fields, FEEDBACK_OBJECT, 'Weakness__c');
         addField(fields, FEEDBACK_OBJECT, 'Comments__c');
-        addField(fields, FEEDBACK_OBJECT, 'Recommendation__c');
         return 'SELECT ' + String.join(fields, ',')
             + ' FROM Interview_Feedback__c WHERE Interview__c = \'' + String.escapeSingleQuotes(String.valueOf(interviewId))
             + '\' ORDER BY Submitted_At__c DESC NULLS LAST LIMIT 1';
@@ -549,9 +623,7 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static void publishMessageEvent(MessageItem item) {
-        if (!objectExists(MESSAGE_EVENT)) {
-            return;
-        }
+        if (!objectExists(MESSAGE_EVENT)) return;
         SObject eventRecord = Schema.getGlobalDescribe().get(MESSAGE_EVENT).newSObject();
         putIfPresent(eventRecord, 'Application_Id__c', String.valueOf(item.applicationId));
         putIfPresent(eventRecord, 'Message_Body__c', item.body);
@@ -563,9 +635,7 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static void publishPipelineEvent(Id applicationId, String status) {
-        if (!objectExists(PIPELINE_EVENT)) {
-            return;
-        }
+        if (!objectExists(PIPELINE_EVENT)) return;
         SObject eventRecord = Schema.getGlobalDescribe().get(PIPELINE_EVENT).newSObject();
         putIfPresent(eventRecord, 'Application_Id__c', String.valueOf(applicationId));
         putIfPresent(eventRecord, 'Status__c', status);
@@ -573,9 +643,7 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static void addField(List<String> fields, String objectName, String fieldName) {
-        if (fieldExists(objectName, fieldName)) {
-            fields.add(fieldName);
-        }
+        if (fieldExists(objectName, fieldName)) fields.add(fieldName);
     }
 
     private static void addRelationshipField(List<String> fields, String relationshipName, String fieldName) {
@@ -583,9 +651,7 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static Object getIfPresent(SObject record, String fieldName) {
-        if (record == null || !record.getSObjectType().getDescribe().fields.getMap().containsKey(fieldName)) {
-            return null;
-        }
+        if (record == null || !record.getSObjectType().getDescribe().fields.getMap().containsKey(fieldName)) return null;
         try {
             return record.get(fieldName);
         } catch (SObjectException e) {
@@ -596,9 +662,7 @@ public with sharing class RecruitmentLwcController {
     private static Object getFirstPresent(SObject record, List<String> fieldNames) {
         for (String fieldName : fieldNames) {
             Object value = getIfPresent(record, fieldName);
-            if (value != null) {
-                return value;
-            }
+            if (value != null) return value;
         }
         return null;
     }
@@ -637,8 +701,7 @@ public with sharing class RecruitmentLwcController {
     }
 
     private static Boolean fieldExists(String objectName, String fieldName) {
-        return objectExists(objectName)
-            && Schema.getGlobalDescribe().get(objectName).getDescribe().fields.getMap().containsKey(fieldName);
+        return objectExists(objectName) && Schema.getGlobalDescribe().get(objectName).getDescribe().fields.getMap().containsKey(fieldName);
     }
 
     private static void putIfPresent(SObject record, String fieldName, Object value) {
@@ -649,18 +712,12 @@ public with sharing class RecruitmentLwcController {
 
     private static String relatedName(SObject record, String relationshipName) {
         SObject related = record.getSObject(relationshipName);
-        if (related == null) {
-            return null;
-        }
+        if (related == null) return null;
         String firstName = asString(getIfPresent(related, 'First_Name__c'));
         String lastName = asString(getIfPresent(related, 'Last_Name__c'));
         List<String> parts = new List<String>();
-        if (!String.isBlank(firstName)) {
-            parts.add(firstName);
-        }
-        if (!String.isBlank(lastName)) {
-            parts.add(lastName);
-        }
+        if (!String.isBlank(firstName)) parts.add(firstName);
+        if (!String.isBlank(lastName)) parts.add(lastName);
         String fullName = String.join(parts, ' ').trim();
         return String.isBlank(fullName) ? asString(getIfPresent(related, 'Name')) : fullName;
     }
@@ -682,17 +739,17 @@ public with sharing class RecruitmentLwcController {
         return value == null ? false : Boolean.valueOf(value);
     }
 
+    // ================= ВНУТРЕННИЕ КЛАССЫ =================
     public class PipelineStage {
         @AuraEnabled public String name;
         @AuraEnabled public List<PipelineCard> applications = new List<PipelineCard>();
-
-        public PipelineStage(String name) {
-            this.name = name;
-        }
+        public PipelineStage(String name) { this.name = name; }
     }
 
     public class PipelineCard {
         @AuraEnabled public Id id;
+        @AuraEnabled public Id candidateId;
+        @AuraEnabled public Id positionId;
         @AuraEnabled public String candidateName;
         @AuraEnabled public String positionName;
         @AuraEnabled public String status;
@@ -737,7 +794,7 @@ public with sharing class RecruitmentLwcController {
         @AuraEnabled public String interviewerName;
         @AuraEnabled public String recommendation;
         @AuraEnabled public String feedback;
-        @AuraEnabled public FeedbackItem feedbackDetails;
+        @AuraEnabled public List<FeedbackItem> feedbacks; 
     }
 
     public class StageItem {
@@ -759,8 +816,8 @@ public with sharing class RecruitmentLwcController {
         @AuraEnabled public String strengths;
         @AuraEnabled public String weaknesses;
         @AuraEnabled public String comments;
-        @AuraEnabled public String recommendation;
-    }
+        @AuraEnabled public Datetime createdDate;   
+}
 
     public class ScoreTrendPoint {
         @AuraEnabled public String label;
@@ -790,102 +847,47 @@ public with sharing class RecruitmentLwcController {
         @AuraEnabled public String createdByName;
     }
 
-    @AuraEnabled
+    //  FILTER OPTIONS METHODS 
+    @AuraEnabled(cacheable=true)
     public static FilterOptions getFilterOptions() {
         FilterOptions options = new FilterOptions();
+    
+    
+    
+    options.departments.add(new FilterOption('IT', 'IT'));
+    options.departments.add(new FilterOption('HR', 'HR'));
+    options.departments.add(new FilterOption('Sales', 'Sales'));
+    options.departments.add(new FilterOption('Marketing', 'Marketing'));
+    options.departments.add(new FilterOption('Finance', 'Finance'));
+    
+    options.recruiters.add(new FilterOption('John Doe', 'John Doe'));
+    options.recruiters.add(new FilterOption('Jane Smith', 'Jane Smith'));
+    options.recruiters.add(new FilterOption('Mike Johnson', 'Mike Johnson'));
+    
+    options.positions.add(new FilterOption('IT Manager', 'IT Manager'));
+    options.positions.add(new FilterOption('IT Specialist', 'IT Specialist'));
+    options.positions.add(new FilterOption('Sales Manager', 'Sales Manager'));
+    options.positions.add(new FilterOption('HR Generalist', 'HR Generalist'));
+    
+    
+    
+    return options;
+}
 
-        try {
-            if (!objectExists(APPLICATION_OBJECT)) {
-                return options;
-            }
-
-            Boolean hasDept = fieldExists(APPLICATION_OBJECT, 'Department__c');
-            List<String> fields = new List<String>{ 'Id', 'Position__r.Name', 'Recruiter__r.Name' };
-            if (hasDept) {
-                fields.add('Department__c');
-            }
-
-            List<SObject> allApps = Database.query(
-                'SELECT ' + String.join(fields, ', ') + ' FROM Application__c LIMIT 1000'
-            );
-
-            Set<String> deptSeen = new Set<String>();
-            Set<String> recruiterSeen = new Set<String>();
-            Set<String> positionSeen = new Set<String>();
-
-            for (SObject app : allApps) {
-                if (hasDept) {
-                    String dept = (String) app.get('Department__c');
-                    if (String.isNotBlank(dept) && deptSeen.add(dept)) {
-                        options.departments.add(new FilterOption(dept, dept));
-                    }
-                }
-
-                String position = relatedName(app, 'Position__r');
-                if (String.isNotBlank(position) && positionSeen.add(position)) {
-                    options.positions.add(new FilterOption(position, position));
-                }
-
-                String recruiter = relatedName(app, 'Recruiter__r');
-                if (String.isNotBlank(recruiter) && recruiterSeen.add(recruiter)) {
-                    options.recruiters.add(new FilterOption(recruiter, recruiter));
-                }
-            }
-        } catch (Exception e) {
-            System.debug('Error in getFilterOptions: ' + e.getMessage() + '\n' + e.getStackTraceString());
-        }
-
-        return options;
-    }
-
-    @AuraEnabled
-    public static void bulkUpdateApplications(List<Id> applicationIds, String action) {
-        if (applicationIds == null || applicationIds.isEmpty() || String.isBlank(action)) {
-            throw new AuraHandledException('Applications and action are required.');
-        }
-
-        List<SObject> appsToUpdate = new List<SObject>();
-        String targetStatus = action.equals('reject') ? 'Rejected' : 'Interview 1';
-
-        for (SObject app : Database.query(
-            'SELECT Id, Status__c FROM Application__c WHERE Id IN (\'' + String.join(new List<Id>(applicationIds), '\',\'') + '\')'
-        )) {
-            String currentStatus = (String) app.get('Status__c');
-            if (StatusTransitionValidator.validate(currentStatus, targetStatus)) {
-                app.put('Status__c', targetStatus);
-                if (fieldExists(APPLICATION_OBJECT, 'Last_Stage_Change_Date__c')) {
-                    app.put('Last_Stage_Change_Date__c', Date.today());
-                }
-                appsToUpdate.add(app);
-            }
-        }
-
-        if (!appsToUpdate.isEmpty()) {
-            update appsToUpdate;
-            publishPipelineEvent(null, 'Bulk update');
-        }
-    }
-
+    // Вспомогательные классы (если их ещё нет в вашем контроллере)
     public class FilterOptions {
         @AuraEnabled public List<FilterOption> departments = new List<FilterOption>();
         @AuraEnabled public List<FilterOption> recruiters = new List<FilterOption>();
         @AuraEnabled public List<FilterOption> positions = new List<FilterOption>();
-    }
+}
 
     public class FilterOption {
         @AuraEnabled public String label;
         @AuraEnabled public String value;
-
+        
         public FilterOption(String value, String label) {
             this.value = value;
             this.label = label;
-        }
     }
-
-    public class ChatterItem {
-        @AuraEnabled public Id id;
-        @AuraEnabled public String body;
-        @AuraEnabled public Datetime createdDate;
-        @AuraEnabled public String createdByName;
-    }
+}
 }

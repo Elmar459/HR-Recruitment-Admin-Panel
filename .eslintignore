@@ -1,0 +1,15 @@
+# Ignore LWC test files from LWC language server validation
+# These files use Jest and should not be validated as LWC components
+**/__tests__/**
+**/lwc/**/__tests__/**
+
+# Build output
+.localdevserver
+.sfdx
+.sf
+
+# Dependencies
+node_modules/
+
+# Coverage reports
+coverage/

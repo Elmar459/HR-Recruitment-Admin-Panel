@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<EmailTemplate xmlns="http://soap.sforce.com/2006/04/metadata">
+    <available>true</available>
+    <encodingKey>UTF-8</encodingKey>
+    <name>Application Submission Confirmation</name>
+    <style>none</style>
+    <subject>Application Received - {!Application__c.Name}</subject>
+    <textOnly>Thank you for applying to ABB Tech Academy.
+
+Your application has been successfully submitted and is currently under review by our recruitment team.
+
+Application Number: {!Application__c.Name}
+
+Current Status: New
+
+Expected Review Timeline: 3–5 business days
+
+We appreciate your interest in joining our company.
+
+Best regards,
+TechHire Recruitment Team</textOnly>
+    <type>text</type>
+</EmailTemplate>

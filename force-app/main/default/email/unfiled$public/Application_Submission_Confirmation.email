@@ -1,0 +1,16 @@
+Dear {!Candidate__c.First_Name__c},
+
+Thank you for applying to ABB Tech Academy.
+
+Your application has been successfully submitted and is currently under review by our recruitment team.
+
+Application Number: {!Application__c.Name}
+
+Current Status: New
+
+Expected Review Timeline: 3–5 business days
+
+We appreciate your interest in joining our company.
+
+Best regards,
+TechHire Recruitment Team
